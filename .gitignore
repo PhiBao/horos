@@ -9,3 +9,4 @@ cache/
 .env
 .env.deployed
 *.tsbuildinfo
+THESIS.md
