@@ -81,6 +81,24 @@ sample releases funds when a vision model returns `confidence: "HIGH"`, and stor
 a release timestamp it never reads. A confidence string is not a control. Here the
 model's output is an input, never the release condition.
 
+The judgment layer ([`lib/judgment.ts`](lib/judgment.ts)) uses TypeSafe's System
+One models, which return **the calibrated probability that a proposition is
+true** — a number, not a sentence. There is no free text to launder a conclusion
+through and no prompt to argue with. Measured on the two invoices in the demo,
+asked the same questions of each:
+
+| | attack invoice | ordinary invoice |
+|---|---|---|
+| is an ordinary invoice | **0.01** | 0.70 |
+| discourages verification | **0.98** | 0.10 |
+| contains text addressed to the reader | 0.24 | 0.21 |
+
+That separation came from prose in a document rather than from a list lookup. The
+thresholds that turn those numbers into action live in our code, never in a
+prompt — and the advisory verdict a model can return is only ever `ESCALATE`. An
+unremarkable invoice produces no advisory at all, because a model has nothing to
+add to it.
+
 ---
 
 ## The ceremony
