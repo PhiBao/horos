@@ -19,6 +19,7 @@ import {getPublicClient, getLocalSigner, currentNetwork, formatUsdc, explorerTx,
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
 import {decide, type Evidence} from "../lib/policy.js";
 import {screenCounterparty, toEvidence} from "../lib/screening.js";
+import {buildInvoice, judgeInvoice, judgmentLines, readInvoice, type ReadInvoice} from "../lib/demo-invoices.js";
 import {VENDOR_KEY} from "../lib/demo-keys.js";
 
 loadEnv();
@@ -180,7 +181,13 @@ async function main() {
 
   // ---- 4. the attack -------------------------------------------------
   t("An invoice arrives with an account we have never paid");
-  const ev = await evidence(cpId, VENDOR_NEW, PAY_SECOND);
+  const attackDoc = buildInvoice("attack", {payTo: VENDOR_NEW, prior: VENDOR, amount: "2400.00"});
+  const read = readInvoice(attackDoc);
+  note("read " + read.amount + " USDC for " + read.counterpartyName + ", payable to " + short(read.account ?? "0x"));
+
+  const ev = await evidence(cpId, VENDOR_NEW, PAY_SECOND, read);
+  note("what the document says, as probabilities rather than a verdict:");
+  for (const l of judgmentLines(ev.judgment)) note(l);
   const d = decide(ev);
   note(`policy: ${d.verdict}`);
   for (const r of d.reasons.filter((x) => x.blocking)) note(`  · ${r.detail}`);
@@ -197,7 +204,7 @@ async function main() {
 
   // ---- 6. pay the new account ----------------------------------------
   t("Pay the new account. It is on the record now.");
-  const d2 = decide(await evidence(cpId, VENDOR_NEW, PAY_SECOND));
+  const d2 = decide(await evidence(cpId, VENDOR_NEW, PAY_SECOND, readInvoice(buildInvoice("afterMove", {payTo: VENDOR_NEW, amount: "180.00"}))));
   note(`policy: ${d2.verdict}  —  ${d2.headline}`);
   if (d2.verdict !== "RELEASE") {
     console.error("\n  the policy still refuses the newly attested account — investigate\n");
@@ -224,7 +231,12 @@ async function main() {
   console.log(`  Vault:        ${explorerAddress(dep.vault)}\n`);
 }
 
-async function evidence(cpId: `0x${string}`, invoiceAccount: `0x${string}`, amount: bigint): Promise<Evidence> {
+async function evidence(
+  cpId: `0x${string}`,
+  invoiceAccount: `0x${string}`,
+  amount: bigint,
+  read: ReadInvoice,
+): Promise<Evidence> {
   const [cp, lineage, cap, globalCap, payerCount, payerTotal] = await Promise.all([
     client.readContract({address: dep.registry, abi: registryAbi, functionName: "get", args: [cpId]}) as Promise<{canonicalName: string; status: number; activeAccount: `0x${string}`}>,
     client.readContract({address: dep.registry, abi: registryAbi, functionName: "lineage", args: [cpId]}) as Promise<unknown[]>,
@@ -249,6 +261,14 @@ async function evidence(cpId: `0x${string}`, invoiceAccount: `0x${string}`, amou
     counterpartyCap: cap,
     globalCap,
     screening: toEvidence(await screenCounterparty(invoiceAccount)),
+    judgment: await judgeInvoice(read.doc, invoiceAccount, {
+      paymentsMadeSoFar: Number(payerCount),
+      previouslyPaidAddress: cp.activeAccount,
+      addressMatchesRecord: cp.activeAccount.toLowerCase() === invoiceAccount.toLowerCase(),
+      daysRelationship: 670,
+    }),
+    injectedInstructions: read.injectedInstructions,
+    ambiguousDestination: read.ambiguousDestination,
   };
 }
 

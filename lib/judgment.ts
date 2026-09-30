@@ -20,15 +20,21 @@
  *   extraction -> regex first, a text model only if one is configured
  *   release    -> never either of them. See lib/policy.ts
  *
- * Measured on the two invoices in the demo, against the same questions:
+ * Measured on the three documents in the demo (lib/demo-invoices.ts), same four
+ * questions, three runs each, medians:
  *
- *                     attack invoice    ordinary invoice
- *   is_ordinary              0.01               0.70
- *   suppresses_verification  0.98               0.10
- *   addressed_to_reader      0.24               0.21
+ *                          attack   routine   after the move
+ *   is_ordinary              0.01     0.61        0.14
+ *   addressed_to_reader      0.66     0.11        0.13
+ *   suppresses_verification  0.98     0.03        0.04
+ *   asks_for_secrecy         0.99     0.02        0.03
  *
- * The separation on the first two is the signal we wanted, and it came from
- * prose in a document rather than from a lookup against a list.
+ * The last column is the useful one: an invoice with no attack in it, at an
+ * address we have never paid, before the ceremony. Three of the four separate
+ * cleanly and the policy acts on exactly those. `is_ordinary` reads 0.14 on a
+ * genuinely dull invoice, so it is badly calibrated and we do not threshold on
+ * it - which is the sort of thing you only learn by measuring rather than by
+ * asking the model how confident it is.
  *
  * The important part is what happens next. A noul is not a verdict. It becomes a
  * number that `policy.ts` thresholds, and - as with any model - it can only ever
@@ -43,6 +49,8 @@ export type Signal = {
   /** The probability that the proposition is true, 0 to 1. */
   probability: number;
   question: string;
+  /** The same proposition in three or four words, for a decision card. */
+  label: string;
 };
 
 export type DocumentJudgment = {
@@ -66,6 +74,21 @@ const API_URL = "https://api.typesafe.ai/v1/systemone";
  * on that, and asking it would invite exactly the kind of authority it must not
  * have.
  */
+/**
+ * Each proposition in the words a person would use.
+ *
+ * Kept beside the question rather than derived from it, because the decision card
+ * has to be readable by someone who does not know what "noul" means - and because
+ * a reason that says "asks for secrecy" when the signal that fired was about
+ * verification is worse than no reason at all.
+ */
+const LABELS: Record<string, string> = {
+  is_ordinary: "does not read like a routine invoice",
+  addressed_to_reader: "contains text addressed to whoever is reading it",
+  suppresses_verification: "discourages checking the payment details",
+  asks_for_secrecy: "asks for the arrangement to be kept quiet",
+};
+
 const QUESTIONS = {
   is_ordinary: {
     type: "noul",
@@ -161,7 +184,9 @@ export async function judgeDocument(
     const signals: Signal[] = Object.entries(QUESTIONS)
       .map(([id, q]) => {
         const n = json.answers?.[id]?.noul;
-        return typeof n === "number" ? {id, probability: n, question: q.instructions} : null;
+        return typeof n === "number"
+          ? {id, probability: n, question: q.instructions, label: LABELS[id] ?? q.instructions}
+          : null;
       })
       .filter((s): s is Signal => s !== null);
 
@@ -199,11 +224,5 @@ function summarise(signals: Signal[]): string | undefined {
   const worst = [...signals].sort((a, b) => b.probability - a.probability)[0];
   if (!worst || worst.probability <= ESCALATE_ABOVE) return undefined;
   const pct = Math.round(worst.probability * 100);
-  const short: Record<string, string> = {
-    is_ordinary: "this does not read like a routine invoice",
-    addressed_to_reader: "it contains text addressed to whoever is reading it",
-    suppresses_verification: "it discourages checking the payment details",
-    asks_for_secrecy: "it asks for the arrangement to be kept quiet",
-  };
-  return `${short[worst.id] ?? worst.question} (${pct}%)`;
+  return `the document ${worst.label} (${pct}% likely)`;
 }

@@ -49,6 +49,30 @@ export type Evidence = {
   /** Budget the human set for this counterparty. 0 means none. */
   counterpartyCap: bigint;
   globalCap: bigint;
+  /**
+   * What the document itself says, as calibrated probabilities rather than a
+   * verdict. See lib/judgment.ts.
+   *
+   * Present but advisory. Absent is fine: a judgment provider being unreachable
+   * is not a reason to pay, and not a reason to crash. The policy below reads
+   * these only to escalate.
+   */
+  judgment?: {
+    provider: "typesafe" | "none";
+    signals: {id: string; probability: number; question: string; label: string}[];
+    rationale?: string;
+  };
+
+  /** Text in the document that read as an instruction to the reader. */
+  injectedInstructions?: string[];
+
+  /**
+   * Set when the invoice named more than one payment destination and offered no
+   * way to choose. Extraction returns null rather than picking one, and this is
+   * how the refusal reaches the user instead of vanishing.
+   */
+  ambiguousDestination?: string[];
+
   screening: {
     checked: boolean;
     flagged: boolean;
@@ -78,7 +102,16 @@ export type Decision = {
   modelProposal?: {verdict: Verdict; rationale: string};
 };
 
-export const POLICY_VERSION = "1.0.0";
+export const POLICY_VERSION = "1.1.0";
+
+/**
+ * Above this calibrated probability, a document signal escalates the payment.
+ *
+ * Deliberately at 0.5, not 0.9. The cost of a false positive is one question to a
+ * person; the cost of a false negative is money sent to whoever wrote the
+ * invoice. Those are not symmetric, so the threshold is not either.
+ */
+export const JUDGMENT_ESCALATE_ABOVE = 0.5;
 
 /**
  * The policy. Pure function of the evidence.
@@ -113,6 +146,53 @@ export function decide(ev: Evidence): Decision {
       policyVersion: POLICY_VERSION,
       decidedAt: now,
     };
+  }
+
+  // ---- 1b. What does the document itself say? ------------------------
+  // Injection strings are the cheapest possible signal, and they are the one an
+  // attacker must include. A legitimate invoice does not tell the reader what to
+  // disregard.
+  if (ev.injectedInstructions?.length) {
+    reasons.push({
+      code: "INJECTED_INSTRUCTIONS",
+      detail:
+        `The document contains text addressed to whoever is reading it: ` +
+        `${ev.injectedInstructions.slice(0, 3).map((c) => `"${c}"`).join(", ")}. ` +
+        `A supplier invoice has no reason to say this. It has been recorded, not followed.`,
+      blocking: true,
+    });
+  }
+
+  // An invoice that names two destinations and does not say which one it wants is
+  // not an invoice to act on. This is the one case where the honest answer and the
+  // convenient answer differ, and the convenient one is what an attacker is counting
+  // on: pick the address that appears most often, or the most recent, or the last.
+  if (ev.ambiguousDestination?.length) {
+    reasons.push({
+      code: "AMBIGUOUS_DESTINATION",
+      detail:
+        `The document names ${ev.ambiguousDestination.length} payment destinations ` +
+        `(${ev.ambiguousDestination.map((a) => `${a.slice(0, 8)}…${a.slice(-4)}`).join(", ")}) ` +
+        `and does not say which one it wants. Nobody is guessing which of those was meant.`,
+      blocking: true,
+    });
+  }
+
+  // A judgment signal is a calibrated probability, so it gets a threshold rather
+  // than a yes/no. The threshold is in this file because the consequence of being
+  // wrong belongs to the code, not to the prompt. Escalating on a weak signal
+  // would make the agent nag; ignoring a strong one would make it decorative.
+  if (ev.judgment?.provider === "typesafe") {
+    for (const signal of ev.judgment.signals) {
+      if (signal.probability < JUDGMENT_ESCALATE_ABOVE) continue;
+      reasons.push({
+        code: `DOCUMENT_${signal.id.toUpperCase()}`,
+        detail:
+          `The document ${signal.label} — judged ${Math.round(signal.probability * 100)}% likely. ` +
+          `That is a threshold in this file, not a rule in a prompt, and this payment is worth a person looking at it.`,
+        blocking: true,
+      });
+    }
   }
 
   // ---- 2. Is the money safe to move at all? ---------------------------

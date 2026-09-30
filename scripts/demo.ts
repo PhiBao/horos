@@ -14,9 +14,9 @@ import {VENDOR_KEY, VENDOR_NEW_KEY, ATTACKER_KEY} from "../lib/demo-keys.js";
 import {privateKeyToAccount} from "viem/accounts";
 import {getPublicClient, getLocalSigner, currentNetwork, formatUsdc, explorerTx, explorerAddress, USDC_ADDRESS} from "../lib/chain.js";
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
-import {decide, applyModelProposal, type Evidence} from "../lib/policy.js";
+import {decide, type Evidence} from "../lib/policy.js";
 import {screenCounterparty, toEvidence} from "../lib/screening.js";
-import {extractInvoice, proposeVerdict} from "../lib/invoice.js";
+import {buildInvoice, judgeInvoice, judgmentLines, readInvoice, type ReadInvoice} from "../lib/demo-invoices.js";
 
 loadEnv();
 
@@ -283,7 +283,13 @@ async function main() {
   // ---------------------------------------------------------------------
   t("The attack. A new account arrives on the invoice, with no ceremony behind it.");
   note("The invoice asks for a different account. Nothing has signed for the move.");
-  const ev = await gatherEvidence(cpId, VENDOR_NEW, PAY_SECOND, 0);
+  const attackDoc = buildInvoice("attack", {payTo: VENDOR_NEW, prior: VENDOR, amount: "2400.00"});
+  const read = readInvoice(attackDoc);
+  note("read " + read.amount + " USDC for " + read.counterpartyName + ", payable to " + short(read.account ?? "0x"));
+
+  const ev = await gatherEvidence(cpId, VENDOR_NEW, PAY_SECOND, 0, read);
+  note("what the document says, as probabilities rather than a verdict:");
+  for (const l of judgmentLines(ev.judgment)) note(l);
   let d = decide(ev);
   note(`policy: ${d.verdict}  —  ${d.headline}`);
   ok(`policy refused, before any money moved. The contract was never called.`);
@@ -352,8 +358,12 @@ async function main() {
 
   // ---------------------------------------------------------------------
   t("Pay the new account. Now it is on the record.");
-  const ev2 = await gatherEvidence(cpId, VENDOR_NEW, PAY_SECOND, 0);
-  d = applyModelProposal(decide(ev2), await proposeVerdictSafe());
+  const movedDoc = buildInvoice("afterMove", {payTo: VENDOR_NEW, amount: "180.00"});
+  const read2 = readInvoice(movedDoc);
+  note("read " + read2.amount + " USDC, payable to " + short(read2.account ?? "0x"));
+
+  const ev2 = await gatherEvidence(cpId, VENDOR_NEW, PAY_SECOND, 0, read2);
+  d = decide(ev2);
   note(`policy: ${d.verdict}  —  ${d.headline}`);
   await send(() => regClient.writeContract({address: dep.vault, abi: vaultAbi, functionName: "pay", args: [cpId, PAY_SECOND, ref("inv-2")]}),
     `pay ${formatUsdc(PAY_SECOND)} USDC to the newly attested account`,
@@ -395,7 +405,13 @@ async function main() {
   console.log(`  Vault:    ${explorerAddress(dep.vault)}\n`);
 }
 
-async function gatherEvidence(cpId: `0x${string}`, invoiceAccount: `0x${string}`, amount: bigint, termsDays: number): Promise<Evidence> {
+async function gatherEvidence(
+  cpId: `0x${string}`,
+  invoiceAccount: `0x${string}`,
+  amount: bigint,
+  termsDays: number,
+  read: ReadInvoice,
+): Promise<Evidence> {
   const [cp, lineage, cap, globalCap, payerCount, payerTotal, pending] = await Promise.all([
     client.readContract({address: dep.registry, abi: registryAbi, functionName: "get", args: [cpId]}) as Promise<{canonicalName: string; status: number; activeAccount: `0x${string}`}>,
     client.readContract({address: dep.registry, abi: registryAbi, functionName: "lineage", args: [cpId]}) as Promise<unknown[]>,
@@ -423,8 +439,17 @@ async function gatherEvidence(cpId: `0x${string}`, invoiceAccount: `0x${string}`
     counterpartyCap: cap,
     globalCap,
     screening: toEvidence(await screenCounterparty(invoiceAccount)),
+    judgment: await judgeInvoice(read.doc, invoiceAccount, {
+      paymentsMadeSoFar: Number(payerCount),
+      previouslyPaidAddress: cp.activeAccount,
+      addressMatchesRecord: cp.activeAccount.toLowerCase() === invoiceAccount.toLowerCase(),
+      daysRelationship: 670,
+    }),
+    injectedInstructions: read.injectedInstructions,
+    ambiguousDestination: read.ambiguousDestination,
   };
 }
+
 
 async function hasAttestedSuccession(cpId: `0x${string}`): Promise<boolean> {
   const ids = (await client.readContract({address: dep.registry, abi: registryAbi, functionName: "successionsOf", args: [cpId]})) as `0x${string}`[];
@@ -454,13 +479,6 @@ async function signDigest(key: `0x${string}`, digest: `0x${string}`): Promise<`0
   return privateKeyToAccount(key).sign({hash: digest}) as Promise<`0x${string}`>;
 }
 
-async function proposeVerdictSafe() {
-  try {
-    return await proposeVerdict({raw: "", counterpartyName: "", amount: "", currency: "USDC", account: null, termsDays: 0, injectedInstructions: [], extractedBy: "regex"});
-  } catch {
-    return undefined;
-  }
-}
 
 /**
  * Absolute amounts, in USDC. Small enough to fit a single faucet claim, and

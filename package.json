@@ -45,5 +45,14 @@
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
+  },
+  "author": "PhiBao",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PhiBao/horos.git"
+  },
+  "homepage": "https://github.com/PhiBao/horos#readme",
+  "bugs": {
+    "url": "https://github.com/PhiBao/horos/issues"
   }
 }
