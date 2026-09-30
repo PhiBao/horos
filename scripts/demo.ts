@@ -10,6 +10,7 @@
 
 import {readFileSync} from "node:fs";
 import {keccak256, toHex} from "viem";
+import {VENDOR_KEY, VENDOR_NEW_KEY, ATTACKER_KEY} from "../lib/demo-keys.js";
 import {privateKeyToAccount} from "viem/accounts";
 import {getPublicClient, getLocalSigner, currentNetwork, formatUsdc, explorerTx, explorerAddress, USDC_ADDRESS} from "../lib/chain.js";
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
@@ -36,13 +37,32 @@ const wallet = getLocalSigner();
  * keeps its key in this file only because the demo has to perform a succession
  * ceremony on its behalf; a real vendor signs on their own machine.
  */
-const VENDOR_KEY = "0xREDACTED_DEMO_VENDOR_KEY" as `0x${string}`;
-const VENDOR_NEW_KEY = "0xREDACTED_DEMO_VENDOR_NEW_KEY" as `0x${string}`;
-const ATTACKER_KEY = "0xREDACTED_DEMO_ATTACKER_KEY" as `0x${string}`;
+const VENDOR = privateKeyToAccount(requireVendorKey()).address;
+const VENDOR_NEW = privateKeyToAccount(requireNewKey()).address;
+const ATTACKER = privateKeyToAccount(requireAttackerKey()).address;
 
-const VENDOR = privateKeyToAccount(VENDOR_KEY).address;
-const VENDOR_NEW = privateKeyToAccount(VENDOR_NEW_KEY).address;
-const ATTACKER = privateKeyToAccount(ATTACKER_KEY).address;
+function requireVendorKey(): `0x${string}` {
+  if (!VENDOR_KEY) {
+    console.error("\n  HOROS_DEMO_VENDOR_KEY is not set.");
+    console.error("  The vendor must sign for itself; that is the entire point of the ceremony.\n");
+    process.exit(1);
+  }
+  return VENDOR_KEY;
+}
+function requireNewKey(): `0x${string}` {
+  if (!VENDOR_NEW_KEY) {
+    console.error("\n  HOROS_DEMO_VENDOR_NEW_KEY is not set.\n");
+    process.exit(1);
+  }
+  return VENDOR_NEW_KEY;
+}
+function requireAttackerKey(): `0x${string}` {
+  if (!ATTACKER_KEY) {
+    console.error("\n  HOROS_DEMO_ATTACKER_KEY is not set.\n");
+    process.exit(1);
+  }
+  return ATTACKER_KEY;
+}
 
 let step = 0;
 const t = (msg: string) => console.log(`\n\x1b[1m${String(++step).padStart(2, "0")}. ${msg}\x1b[0m`);
@@ -306,14 +326,14 @@ async function main() {
   })) as `0x${string}`;
 
   // 1. the account that received the last payment
-  const oldSig = await signDigest(VENDOR_KEY, digest);
+  const oldSig = await signDigest(requireVendorKey(), digest);
   await send(() => regClient.writeContract({address: dep.registry, abi: registryAbi, functionName: "attest", args: [succId, 0, oldSig]}),
     "attested by the account that was last paid",
   );
 
   // The recipient can never be one of its own signatories. Prove it.
   try {
-    const newSig = await signDigest(VENDOR_NEW_KEY, digest);
+    const newSig = await signDigest(requireNewKey(), digest);
     await regClient.simulateContract({address: dep.registry, abi: registryAbi, functionName: "attest", args: [succId, 0, newSig]});
     warn("the recipient was able to attest to its own arrival — investigate");
   } catch {

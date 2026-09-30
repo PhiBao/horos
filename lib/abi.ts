@@ -5,6 +5,8 @@
  * runs against a local anvil, Arc testnet and Arc mainnet.
  */
 
+import {readFileSync, existsSync} from "node:fs";
+import {resolve} from "node:path";
 import CounterpartyRegistryArtifact from "../contracts/out/CounterpartyRegistry.sol/CounterpartyRegistry.json";
 import CustodyVaultArtifact from "../contracts/out/CustodyVault.sol/CustodyVault.json";
 
@@ -20,12 +22,28 @@ export interface Deployment {
   deployer: `0x${string}`;
 }
 
-function requireEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`${name} is not set. Run scripts/deploy.ts first.`);
-  return v;
+/** The committed deployment record, or null before the first deploy. */
+function committedDeployment(): Deployment | null {
+  const p = resolve(process.cwd(), "deployment.json");
+  if (!existsSync(p)) return null;
+  try {
+    return JSON.parse(readFileSync(p, "utf8")) as Deployment;
+  } catch {
+    return null;
+  }
 }
 
+/**
+ * Where the live deployment lives.
+ *
+ * `deployment.json` is committed on purpose: it holds contract addresses, a chain
+ * id and a timestamp, all of which are public and readable on the chain. That way
+ * a judge can see exactly what is deployed without running anything.
+ *
+ * Environment variables win, so a local anvil run can point the app elsewhere.
+ * Read lazily rather than imported, because the file does not exist until the
+ * first deploy - and the deploy script itself imports this module.
+ */
 let cached: Deployment | null = null;
 
 export function getDeployment(): Deployment {
@@ -35,13 +53,10 @@ export function getDeployment(): Deployment {
     cached = JSON.parse(raw) as Deployment;
     return cached;
   }
-  cached = {
-    registry: requireEnv("HOROS_REGISTRY") as `0x${string}`,
-    vault: requireEnv("HOROS_VAULT") as `0x${string}`,
-    chainId: Number(requireEnv("HOROS_CHAIN_ID")),
-    network: process.env.HOROS_NETWORK ?? "arc-testnet",
-    deployedAt: requireEnv("HOROS_DEPLOYED_AT"),
-    deployer: requireEnv("HOROS_DEPLOYER") as `0x${string}`,
-  };
+  const committed = committedDeployment();
+  if (!committed) {
+    throw new Error("No deployment found. Run `pnpm deploy:testnet` first.");
+  }
+  cached = {...committed, network: process.env.HOROS_NETWORK ?? committed.network};
   return cached;
 }

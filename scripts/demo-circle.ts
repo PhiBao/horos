@@ -19,6 +19,7 @@ import {getPublicClient, getLocalSigner, currentNetwork, formatUsdc, explorerTx,
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
 import {decide, type Evidence} from "../lib/policy.js";
 import {screenCounterparty, toEvidence} from "../lib/screening.js";
+import {VENDOR_KEY} from "../lib/demo-keys.js";
 
 loadEnv();
 
@@ -310,7 +311,7 @@ async function proposeAndComplete(
     args: [s.counterpartyId, s.id, s.to, s.expiresAt],
   })) as `0x${string}`;
 
-  const vendorKey = process.env.HOROS_DEMO_VENDOR_KEY as `0x${string}`;
+  const vendorKey = VENDOR_KEY;
   if (!vendorKey) {
     console.error("\n  HOROS_DEMO_VENDOR_KEY is not set.");
     console.error("  The vendor must sign for itself: that is the whole point.\n");

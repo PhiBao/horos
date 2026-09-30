@@ -82,9 +82,10 @@ async function deploy() {
   console.log(`  CustodyVault          ${vault}`);
 
   // Hand the vault to the agent's own wallet, so the entity that spends is the
-  // entity that sets the limits. If a Circle wallet is configured, that is the
-  // owner; otherwise the deployer keeps it and getLocalSigner() is the signer.
-  const agentWallet = process.env.CIRCLE_WALLET_ADDRESS as `0x${string}` | undefined;
+  // entity that sets the limits. Off unless HOROS_VAULT_OWNER is set, because the
+  // two demos use different signers: pnpm demo signs locally, pnpm demo:circle
+  // signs through Circle, and only one of them can be the owner at a time.
+  const agentWallet = process.env.HOROS_VAULT_OWNER as `0x${string}` | undefined;
   if (agentWallet && agentWallet.toLowerCase() !== account.address.toLowerCase()) {
     const xfer = await wallet.writeContract({
       chain,
@@ -118,6 +119,15 @@ async function deploy() {
     deployer: account.address,
   };
 
+  // deployment.json, not .env.deployed.
+  //
+  // Everything here is public: contract addresses, chain id, a timestamp, the
+  // deployer address. All of it is readable on the chain. Committing it is the
+  // point - a judge should be able to see the live deployment without running
+  // anything. But naming it .env would invite every secret-scanner and every
+  // future contributor to treat public config as a credential and gitignore it.
+  writeFileSync(resolve(process.cwd(), "deployment.json"), JSON.stringify(deployment, null, 2) + "\n");
+
   const out = [
     `HOROS_DEPLOYMENT=${JSON.stringify(deployment)}`,
     `HOROS_REGISTRY=${registry}`,
@@ -131,11 +141,10 @@ async function deploy() {
     `NEXT_PUBLIC_HOROS_CHAIN_ID=${chain.id}`,
     `NEXT_PUBLIC_HOROS_NETWORK=${network}`,
   ].join("\n");
-
   writeFileSync(resolve(process.cwd(), ".env.deployed"), out + "\n");
   appendToEnvLocal(out);
 
-  console.log(`\n  wrote .env.deployed and .env.local\n`);
+  console.log(`\n  wrote deployment.json (public, committed) and .env.local (private, ignored)\n`);
   return deployment;
 }
 
