@@ -44,21 +44,23 @@ export const NETWORKS = {
 export type NetworkKey = keyof typeof NETWORKS;
 
 /**
- * Four independent public endpoints. The demo does not depend on any one of
- * them being up.
+ * Independent public endpoints for reads. The demo does not depend on any one
+ * of them being up.
+ *
+ * Note: Arc's public RPCs are read-only. They reject eth_sendTransaction, so
+ * writes need a funded node (QuickNode, configured in .env) or Circle's
+ * developer-controlled wallets.
  */
 const RPC_FALLBACKS: Record<NetworkKey, string[]> = {
   "arc-testnet": [
     "https://rpc.testnet.arc.io",
     "https://rpc.blockdaemon.testnet.arc.io",
     "https://rpc.drpc.testnet.arc.io",
-    "https://rpc.quicknode.testnet.arc.io",
   ],
   "arc-mainnet": [
     "https://rpc.mainnet.arc.io",
     "https://rpc.blockdaemon.mainnet.arc.io",
     "https://rpc.drpc.mainnet.arc.io",
-    "https://rpc.quicknode.mainnet.arc.io",
   ],
 };
 
@@ -110,13 +112,26 @@ export function getWalletClient(account: `0x${string}`, key: NetworkKey = curren
   return createWalletClient({account, chain: getChain(key), transport: http(url, {retryCount: 2})});
 }
 
-/** A signing client backed by a local key. Dev and demo only. */
+/**
+ * A signing client backed by a local key. Dev and demo only.
+ *
+ * Returned with the simulation actions attached, so callers can check whether a
+ * call would revert before spending gas on it.
+ */
 export function getLocalSigner(key: NetworkKey = currentNetwork()) {
   const url = writeRpcUrl(key);
   const account = privateKeyToAccount(
     (process.env.HOROS_DEPLOYER_PRIVATE_KEY as `0x${string}`) ?? ("0x" as `0x${string}`),
   );
-  return createWalletClient({account, chain: getChain(key), transport: http(url, {retryCount: 2})});
+  const wallet = createWalletClient({
+    account,
+    chain: getChain(key),
+    transport: http(url, {retryCount: 2}),
+  });
+  const reader = getPublicClient(key);
+  return Object.assign(wallet, {
+    simulateContract: (args: Record<string, unknown>) => reader.simulateContract(args as never),
+  });
 }
 
 function writeRpcUrl(key: NetworkKey): string {
@@ -125,8 +140,9 @@ function writeRpcUrl(key: NetworkKey): string {
   throw new Error(
     `No writable RPC configured. Arc's public RPCs reject eth_sendTransaction.\n` +
       `Either set HOROS_RPC_URL (testnet node, or http://127.0.0.1:8545 for anvil), or\n` +
-      `use getCircleWallet() from lib/wallet.ts, which signs through Circle's\n` +
-      `developer-controlled wallets and never exposes a private key.`,
+      `use getAgentWallet() from lib/circle.ts, which signs through Circle's\n` +
+      `developer-controlled wallets and never exposes a private key.\n` +
+      `Get a writable endpoint with: qn endpoint create --chain arc --network arc-testnet`,
   );
 }
 
