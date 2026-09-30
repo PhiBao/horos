@@ -1,0 +1,28 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+solc_version = "0.8.28"
+evm_version = "osaka"          # Arc is an Osaka EVM baseline
+optimizer = true
+optimizer_runs = 200
+via_ir = true   # required: the test suite copies LineageEntry[] into storage
+bytecode_hash = "none"
+fs_permissions = [{ access = "read", path = "./out" }]
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = false
+int_types = "long"
+
+[rpc_endpoints]
+arcTestnet = "https://rpc.testnet.arc.io"
+arcMainnet = "https://rpc.mainnet.arc.io"
+
+[rpc_endpoints.arcNode]
+url = "https://rpc.testnet.arc-node.thecanteenapp.com/v1/swrm_9949fade449f0ad4e367494d14d11c4bcc8d4c40d250f4ae04c3387a4847636c"
+
+[etherscan]
+arcTestnet = { key = "", url = "https://explorer.testnet.arc.io/api" }
