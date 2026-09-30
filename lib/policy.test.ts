@@ -85,12 +85,29 @@ describe("the policy decides, the model only proposes", () => {
     expect(s?.blocking).toBe(false);
   });
 
-  it("degrades to escalation when screening could not run, rather than to release", () => {
+  it("blocks when screening could not run and nobody accepted that", () => {
     const d = decide(
       ev({screening: {checked: false, flagged: false, detail: "screening service unavailable"}}),
     );
     // Unavailability is not a pass. It must not silently read as clean.
     expect(d.verdict).not.toBe("RELEASE");
+    expect(codes(d)).toContain("SCREENING_UNAVAILABLE");
+  });
+
+  it("releases when a person has explicitly accepted running without screening", () => {
+    const d = decide(
+      ev({screening: {checked: false, flagged: false, waived: true, detail: "no screening configured"}}),
+    );
+    // A permanent block would be an outage, not a product. The choice is stated
+    // every time so it stays visible.
+    expect(d.verdict).toBe("RELEASE");
+    expect(codes(d)).toContain("SCREENING_WAIVED");
+  });
+
+  it("never lets a waiver hide a screening hit", () => {
+    const d = decide(ev({screening: {checked: true, flagged: true, waived: true, detail: "sanctions match"}}));
+    expect(d.verdict).toBe("HOLD");
+    expect(codes(d)).toContain("SCREENING_FLAG");
   });
 });
 

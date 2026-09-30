@@ -506,3 +506,68 @@ contract HorosTest is Test {
     }
 }
 
+
+// The owner can set limits and stop the vault. It can never redirect a payment,
+// because pay() resolves the destination from the registry and takes no address.
+contract VaultOwnershipTest is Test {
+    CounterpartyRegistry registry;
+    CustodyVault vault;
+    MockUSDC usdc;
+
+    address business = makeAddr("business2");
+    address vendor = makeAddr("vendor2");
+    address agent = makeAddr("agent");
+    bytes32 id;
+
+    function setUp() public {
+        usdc = new MockUSDC();
+        registry = new CounterpartyRegistry(address(this));
+        vault = new CustodyVault(address(registry), address(usdc), business, 1_000_000e6);
+        registry.setVault(address(vault));
+        usdc.mint(business, 100_000e6);
+        vm.prank(business);
+        usdc.approve(address(vault), type(uint256).max);
+        vm.prank(business);
+        id = registry.register("Ownership Test Co", vendor);
+        vm.prank(business);
+        vault.setCounterpartyCap(id, 1_000e6);
+        vm.prank(business);
+        vault.deposit(50_000e6);
+    }
+
+    function test_ownerCanHandOverTheKeys() public {
+        vm.prank(business);
+        vault.transferOwnership(agent);
+        assertEq(vault.owner(), agent);
+
+        // The new owner can set limits.
+        vm.prank(agent);
+        vault.setCounterpartyCap(id, 500e6);
+        assertEq(vault.counterpartyCap(id), 500e6);
+    }
+
+    function test_onlyTheCurrentOwnerCanHandOverTheKeys() public {
+        vm.prank(agent);
+        vm.expectRevert(CustodyVault.NotOwner.selector);
+        vault.transferOwnership(business);
+    }
+
+    function test_handingOverOwnershipCannotRedirectAPayment() public {
+        vm.prank(business);
+        vault.transferOwnership(agent);
+
+        // The new owner can stop the vault, but cannot make it pay a new account:
+        // pay() has no address parameter, so there is nothing to point elsewhere.
+        vm.prank(agent);
+        vault.setPaused(true);
+        vm.prank(agent);
+        vm.expectRevert(CustodyVault.VaultPaused.selector);
+        vault.pay(id, 100e6, keccak256("after-handover"));
+    }
+
+    function test_zeroAddressCannotBecomeOwner() public {
+        vm.prank(business);
+        vm.expectRevert(CustodyVault.ZeroAddress.selector);
+        vault.transferOwnership(address(0));
+    }
+}

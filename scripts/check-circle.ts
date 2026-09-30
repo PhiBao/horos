@@ -73,17 +73,19 @@ try {
     apiKey: process.env.CIRCLE_API_KEY!,
     entitySecret: process.env.CIRCLE_ENTITY_SECRET!,
   });
+  // Circle's Contracts API wants the ABI as a JSON string, not an array. Passing
+  // the array is the single most common cause of a 400 here.
   const q = (await scp.queryContract({
     abiFunctionSignature: "registryOwner()",
-    abiJson: registryAbi as never,
+    abiJson: JSON.stringify(registryAbi) as never,
     address: dep.registry,
     blockchain: circleBlockchain() as never,
-  } as never)) as {data?: {response?: {data?: unknown}}};
-  const readBack = q.data?.response?.data;
+  } as never)) as {data?: {outputData?: unknown; outputValues?: unknown[]}};
+  const readBack = q.data?.outputData;
   check(
     "contract is readable through Circle",
     Boolean(readBack),
-    readBack ? `registryOwner = ${String(readBack).slice(0, 66)}` : "no response",
+    readBack ? `registryOwner = ${String(readBack).slice(0, 66)}` : "no output",
   );
 } catch (e) {
   const msg = (e as {shortMessage?: string}).shortMessage ?? (e as Error).message;

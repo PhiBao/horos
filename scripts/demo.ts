@@ -14,6 +14,7 @@ import {privateKeyToAccount} from "viem/accounts";
 import {getPublicClient, getLocalSigner, currentNetwork, formatUsdc, explorerTx, explorerAddress, USDC_ADDRESS} from "../lib/chain.js";
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
 import {decide, applyModelProposal, type Evidence} from "../lib/policy.js";
+import {screenCounterparty, toEvidence} from "../lib/screening.js";
 import {extractInvoice, proposeVerdict} from "../lib/invoice.js";
 
 loadEnv();
@@ -401,7 +402,7 @@ async function gatherEvidence(cpId: `0x${string}`, invoiceAccount: `0x${string}`
     amount,
     counterpartyCap: cap,
     globalCap,
-    screening: {checked: false, flagged: false, detail: "not wired in this run"},
+    screening: toEvidence(await screenCounterparty(invoiceAccount)),
   };
 }
 

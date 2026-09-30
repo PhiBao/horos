@@ -24,7 +24,8 @@
     "demo": "tsx scripts/demo.ts",
     "check:circle": "tsx scripts/check-circle.ts",
     "check:chain": "tsx scripts/check-chain.ts",
-    "faucet": "tsx scripts/faucet.ts"
+    "faucet": "tsx scripts/faucet.ts",
+    "demo:circle": "tsx scripts/demo-circle.ts"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^4.6.0",

@@ -54,6 +54,15 @@ export type Evidence = {
     flagged: boolean;
     source?: string;
     detail?: string;
+    /**
+     * The business has explicitly accepted running without screening.
+     *
+     * This is a decision a person makes, on the record, and it is visible in the
+     * decision card. Without it, a missing screening service blocks every
+     * payment forever, which is not a product — it is an outage. With it, the
+     * business is told plainly what it is giving up.
+     */
+    waived?: boolean;
   };
 };
 
@@ -108,14 +117,27 @@ export function decide(ev: Evidence): Decision {
 
   // ---- 2. Is the money safe to move at all? ---------------------------
   if (!ev.screening.checked) {
-    // Unavailability is not a pass. A screen that did not run must never read as clean.
-    reasons.push({
-      code: "SCREENING_UNAVAILABLE",
-      detail:
-        ev.screening.detail ??
-        "Counterparty screening could not be run, so it did not pass. A check that did not run is not a clean result.",
-      blocking: true,
-    });
+    if (ev.screening.waived) {
+      // A person chose this. It is stated every time, so the choice stays visible.
+      reasons.push({
+        code: "SCREENING_WAIVED",
+        detail:
+          ev.screening.detail ??
+          "This business has not turned on counterparty screening, and has accepted that. " +
+            "Only payment history is protecting these payments.",
+        blocking: false,
+      });
+    } else {
+      // Unavailability is not a pass. A screen that did not run must never read as
+      // clean, and must never silently become a permanent block either.
+      reasons.push({
+        code: "SCREENING_UNAVAILABLE",
+        detail:
+          ev.screening.detail ??
+          "Counterparty screening could not be run, so it did not pass. A check that did not run is not a clean result.",
+        blocking: true,
+      });
+    }
   }
 
   if (ev.status === "Broken") {

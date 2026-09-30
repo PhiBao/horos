@@ -81,6 +81,22 @@ async function deploy() {
   const vault = vaultReceipt.contractAddress!;
   console.log(`  CustodyVault          ${vault}`);
 
+  // Hand the vault to the agent's own wallet, so the entity that spends is the
+  // entity that sets the limits. If a Circle wallet is configured, that is the
+  // owner; otherwise the deployer keeps it and getLocalSigner() is the signer.
+  const agentWallet = process.env.CIRCLE_WALLET_ADDRESS as `0x${string}` | undefined;
+  if (agentWallet && agentWallet.toLowerCase() !== account.address.toLowerCase()) {
+    const xfer = await wallet.writeContract({
+      chain,
+      abi: vaultAbi,
+      address: vault,
+      functionName: "transferOwnership",
+      args: [agentWallet],
+    });
+    await publicClient.waitForTransactionReceipt({hash: xfer});
+    console.log(`  vault owner    ${agentWallet}  (the agent)`);
+  }
+
   // The vault is the only address allowed to attribute payments, so the
   // registry's record of who paid what cannot be forged by anyone else.
   const setVaultHash = await wallet.writeContract({

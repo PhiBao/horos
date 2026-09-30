@@ -48,6 +48,7 @@ contract CustodyVault {
     event GlobalCapSet(uint256 cap);
     event CounterpartyCapSet(bytes32 indexed counterpartyId, uint256 cap);
     event Withdrawn(address indexed to, uint256 amount);
+    event OwnershipTransferred(address indexed from, address indexed to);
 
     error NotOwner();
     error ZeroAddress();
@@ -134,6 +135,21 @@ contract CustodyVault {
     function setPaused(bool p) external onlyOwner {
         paused = p;
         emit PausedSet(p);
+    }
+
+    /**
+     * @notice Hand ownership to the agent's own wallet, permanently.
+     * @dev One-way by design. Ownership here means: the ability to set budgets and
+     *      to stop the vault. It never means the ability to redirect a payment,
+     *      because `pay()` resolves its destination from the registry and takes
+     *      no address. Handing over the owner therefore cannot hand over the
+     *      ability to spend: it hands over the ability to set limits and to pull
+     *      the plug, which is what an operator should hold.
+     */
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 
     function setGlobalCap(uint256 cap) external onlyOwner {
