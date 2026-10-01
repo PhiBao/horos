@@ -1,0 +1,65 @@
+{
+  // Horos's public site: a decision card and a public counterparty page, both read-only.
+  //
+  // Two properties worth stating, because they are the argument rather than a
+  // detail:
+  //
+  //   1. No write function is reachable. The site reads Arc over public RPCs, which
+  //      reject eth_sendTransaction, and it holds no key. There is no code path from
+  //      this Worker to moving money.
+  //   2. It imports lib/policy.ts from the repository. The deployed site and the
+  //      test suite run the same decision code, so they cannot disagree about what
+  //      would happen.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "horos",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+
+  "assets": {
+    "directory": "./worker/public",
+    "binding": "ASSETS",
+    // The Worker handles the API and the counterparty page itself; everything else
+    // is a static file. Without this the asset router would answer /api/decision
+    // with a 404 page from public/, which is a confusing way to learn that a route
+    // is misspelled.
+    "run_worker_first": ["/api/*", "/c/*", "/healthz"]
+  },
+
+  "vars": {
+    // Public Arc testnet endpoints. Reads only - Arc's public RPCs reject writes by
+    // design, which is one of the reasons this site can hold no key and still be
+    // honest about it.
+    "ARC_RPC_URLS": "https://rpc.testnet.arc.io,https://rpc.blockdaemon.testnet.arc.io,https://rpc.drpc.testnet.arc.io",
+
+    // The live testnet deployment, from deployment.json.
+    "REGISTRY_ADDRESS": "0x6abe92b03091a2756d813808d088fc9b08bf6469",
+    "VAULT_ADDRESS": "0x6d87de0ca5b87da10e7afc46ea87a3967eb8c9ac"
+  },
+
+  // No API key is in this file, and none can be. The judgment key is a Worker secret:
+  //
+  //   pnpm site:secret        (reads the value from your shell, never from a file)
+  //
+  // It is bound in worker/src/index.ts under a name that does not appear anywhere in
+  // this file, on purpose. Wrangler reads the repository's dotenv file and injects
+  // its contents, and Cloudflare rejects a name that is both a var and a secret - so
+  // the two are kept apart by name rather than by hoping.
+  //
+  // Two footguns worth stating, both found the hard way:
+  //
+  //   1. Wrangler's JSONC parser does not strip comments before scanning for bindings.
+  //      Writing an upper-snake identifier in a comment here creates that binding. The
+  //      paragraph above was originally written with the real name in it and the deploy
+  //      grew an empty var of that name, which then blocked the secret of the same name
+  //      from ever being set. Keep env-var names out of these comments.
+  //   2. --keep-vars defaults to false, so a var removed from this file is also removed
+  //      from the deployment. That is the behaviour you want; it just means a rename
+  //      here is a deployment change rather than a cosmetic edit.
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

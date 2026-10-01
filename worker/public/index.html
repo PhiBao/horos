@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horos — the decision card</title>
+<meta name="description" content="An agent that pays invoices on Arc, and refuses to send USDC to an address it cannot prove is the counterparty it already paid.">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="/">Horos</a>
+    <p class="tagline">A change of payment address is a succession ceremony, not a field update.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- Why this page exists. Stated before anything is asked of the reader. -->
+  <section class="lede">
+    <h1>Paste an invoice. Watch it refuse.</h1>
+    <p>
+      The agent reads the document, checks the destination against what has actually
+      been paid before, and reaches a verdict. Every reason is shown, including the
+      ones that did not block. Nothing here needs an account, and nothing here can
+      move money — <a href="#why">the page holds no key</a>.
+    </p>
+  </section>
+
+  <form id="form" autocomplete="off">
+    <div class="row">
+      <label for="cp">Counterparty</label>
+      <input id="cp" name="cp" spellcheck="false" placeholder="0x… 64 hex characters" required>
+      <button type="button" id="find" class="ghost">Load record</button>
+    </div>
+    <p id="cp-hint" class="hint">The counterparty id is derived, not chosen: <code>keccak256(name, firstAccount, registry)</code>. There is nothing to squat on except by having been paid first.</p>
+
+    <div class="row">
+      <label for="text">Invoice</label>
+      <textarea id="text" name="text" rows="12" spellcheck="false" required></textarea>
+    </div>
+
+    <div class="samples">
+      <span>Start from one of these:</span>
+      <button type="button" class="ghost" data-sample="ordinary">a routine invoice</button>
+      <button type="button" class="ghost" data-sample="attack">the redirected one</button>
+      <button type="button" class="ghost" data-sample="afterMove">the next one, after the ceremony</button>
+    </div>
+
+    <button type="submit" id="go">Decide</button>
+    <p id="status" class="hint" role="status" aria-live="polite"></p>
+  </form>
+
+  <section id="result" hidden aria-live="polite"></section>
+
+  <!-- The argument, for anyone who scrolls. -->
+  <section id="why" class="prose">
+    <h2>Why this is not a filter</h2>
+    <p>
+      A filter reads the invoice and decides whether the address looks suspicious. That
+      is a losing game: the address is new to every system that ever sees it, because
+      the attacker generates it. Horos does not score the address. It refuses to
+      <em>name</em> one.
+    </p>
+    <p class="claim">
+      <code>CustodyVault.pay(counterpartyId, amount, reference)</code>
+    </p>
+    <p>
+      There is no parameter for a destination. The vault asks the registry which account
+      this counterparty is currently paid at, and sends there. Paying a new address is
+      not a call this contract can be given, so no prompt, no compromised key and no bug
+      in this page can express it. The refusal is a property of the interface rather than
+      a check that ran.
+    </p>
+    <h2>Changing the address is a ceremony</h2>
+    <p>
+      When a supplier genuinely moves accounts, the move requires two signatures that
+      the recipient cannot produce: the account that was <em>last paid</em>, agreeing to
+      be replaced, and the business, agreeing to the change. Until both exist, the new
+      account is a proposal — visible, pending, and unable to receive anything.
+    </p>
+    <p>
+      If the old key is genuinely lost, that is not a dead end and it is not a silent
+      override either. <a href="/c/">The counterparty page</a> shows what happened: the
+      change is recorded permanently and the counterparty is marked broken, in public,
+      where everyone who might pay it can see.
+    </p>
+    <h2>This page holds no key</h2>
+    <p>
+      It reads Arc over public RPC endpoints, which reject every write by design. The ABI
+      it is compiled against contains no write function
+      (<a href="https://github.com/PhiBao/horos/blob/main/worker/src/abi.ts">worker/src/abi.ts</a>).
+      The decision logic is not reimplemented here — this Worker imports
+      <code>lib/policy.ts</code> from the repository, the same file the unit tests run
+      against, so the deployed site and the test suite cannot disagree.
+    </p>
+    <p class="foot">
+      <a href="https://github.com/PhiBao/horos">Source</a> ·
+      <a href="https://explorer.testnet.arc.io">Arc explorer</a> ·
+      built for the Tameion Agents Hackathon
+    </p>
+  </section>
+
+</main>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

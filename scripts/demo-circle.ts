@@ -36,8 +36,19 @@ const VENDOR_NEW = "0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555";
 const PAYER = (process.env.CIRCLE_WALLET_ADDRESS as `0x${string}`) ?? (process.env.HOROS_DEPLOYER as `0x${string}`);
 
 const usdc = (n: number): bigint => BigInt(Math.floor(n * 10 ** 6));
-const PAY_FIRST = usdc(0.4);
-const PAY_SECOND = usdc(2.4);
+/**
+ * What the two invoices are for.
+ *
+ * Overridable so the demo can be seeded on a testnet where the faucet is a human
+ * clicking a captcha. The defaults are the ones the narrative wants: a small
+ * routine invoice, then a much larger one that arrives with a new account attached,
+ * which is how the real thing looks - the redirect always carries urgency.
+ *
+ * Whatever these are, the invoice text is generated from them, so the number on the
+ * document and the number that moves are the same number.
+ */
+const PAY_FIRST = usdc(Number(process.env.HOROS_DEMO_PAY_FIRST ?? 0.4));
+const PAY_SECOND = usdc(Number(process.env.HOROS_DEMO_PAY_SECOND ?? 2.4));
 const COUNTERPARTY_NAME = "Kestrel Facilities Ltd";
 
 let step = 0;
@@ -181,7 +192,7 @@ async function main() {
 
   // ---- 4. the attack -------------------------------------------------
   t("An invoice arrives with an account we have never paid");
-  const attackDoc = buildInvoice("attack", {payTo: VENDOR_NEW, prior: VENDOR, amount: "2400.00"});
+  const attackDoc = buildInvoice("attack", {payTo: VENDOR_NEW, prior: VENDOR, amount: formatUsdc(PAY_SECOND)});
   const read = readInvoice(attackDoc);
   note("read " + read.amount + " USDC for " + read.counterpartyName + ", payable to " + short(read.account ?? "0x"));
 
@@ -204,7 +215,7 @@ async function main() {
 
   // ---- 6. pay the new account ----------------------------------------
   t("Pay the new account. It is on the record now.");
-  const d2 = decide(await evidence(cpId, VENDOR_NEW, PAY_SECOND, readInvoice(buildInvoice("afterMove", {payTo: VENDOR_NEW, amount: "180.00"}))));
+  const d2 = decide(await evidence(cpId, VENDOR_NEW, PAY_SECOND, readInvoice(buildInvoice("afterMove", {payTo: VENDOR_NEW, amount: formatUsdc(PAY_SECOND)}))));
   note(`policy: ${d2.verdict}  —  ${d2.headline}`);
   if (d2.verdict !== "RELEASE") {
     console.error("\n  the policy still refuses the newly attested account — investigate\n");

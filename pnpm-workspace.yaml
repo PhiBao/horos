@@ -1,4 +1,10 @@
+allowBuilds:
+  esbuild: set this to true or false
+  workerd: set this to true or false
+# Install scripts are denied by default. These two are approved because both need a
+# native binary placed on disk at install time: workerd is the Workers runtime that
+# `wrangler dev` executes, and esbuild is what bundles the Worker and runs the tests.
+# Anything else that wants a postinstall stays denied.
 onlyBuiltDependencies:
   - esbuild
-  - bufferutil
-  - utf-8-validate
+  - workerd

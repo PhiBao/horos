@@ -131,8 +131,33 @@ const QUESTIONS = {
 /** Thresholds live in code, never in the prompt. */
 const ESCALATE_ABOVE = 0.5;
 
-export function typesafeConfigured(): boolean {
-  return Boolean(process.env.TYPESAFE_API_KEY);
+/**
+ * Where the key comes from.
+ *
+ * Passed in explicitly, with `process.env` only as the fallback for the CLI paths.
+ * That ordering is not cosmetic: this module runs in two places now - a Node script
+ * and a Cloudflare Worker - and `process.env` does not exist on the edge. Reading it
+ * first meant the deployed site answered every request with "no judgment provider
+ * configured", which is indistinguishable from a correctly configured deployment
+ * that simply had nothing to say. A silent absence is the worst kind of bug in a
+ * component whose job is to notice things.
+ */
+export function judgmentKey(explicit?: string): string | undefined {
+  // An *explicit* empty string means "no key", and must not fall through to the
+  // environment. `undefined` means the caller did not say, which is a different
+  // thing. Collapsing the two is how a deployment ends up authenticated by a key
+  // nobody intended it to use.
+  if (explicit !== undefined) return explicit.trim() || undefined;
+  // Guarded: `process` is only shimmed, not guaranteed, on non-Node runtimes.
+  try {
+    return typeof process !== "undefined" ? process.env.TYPESAFE_API_KEY : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function typesafeConfigured(explicit?: string): boolean {
+  return Boolean(judgmentKey(explicit));
 }
 
 /**
@@ -156,8 +181,9 @@ export async function judgeDocument(
       daysRelationship: number;
     };
   },
+  opts: {apiKey?: string} = {},
 ): Promise<DocumentJudgment> {
-  const key = process.env.TYPESAFE_API_KEY;
+  const key = judgmentKey(opts.apiKey);
   if (!key) return {signals: [], provider: "none"};
 
   const humanReadable: Record<string, string> = {};
@@ -170,7 +196,7 @@ export async function judgeDocument(
       signal: AbortSignal.timeout(20_000),
       body: JSON.stringify({
         state,
-        model: process.env.TYPESAFE_MODEL ?? "jev-latest",
+        model: process.env["TYPESAFE_MODEL"] ?? "jev-latest",
         questions: QUESTIONS,
       }),
     });

@@ -150,8 +150,9 @@ export async function judgeInvoice(
     addressMatchesRecord: boolean;
     daysRelationship: number;
   },
+  opts: {apiKey?: string} = {},
 ): Promise<Evidence["judgment"] | undefined> {
-  if (!typesafeConfigured()) return undefined;
+  if (!typesafeConfigured(opts.apiKey)) return undefined;
   const j = await judgeDocument({
     invoice: {
       counterparty: doc.counterparty,
@@ -160,7 +161,7 @@ export async function judgeInvoice(
       body: doc.body,
     },
     relationship,
-  });
+  }, opts);
   return {provider: j.provider, signals: j.signals, rationale: j.rationale};
 }
 

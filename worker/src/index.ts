@@ -1,0 +1,545 @@
+/**
+ * The public site.
+ *
+ * What this is for
+ * ----------------
+ * Two screens. The decision card, which is what a business actually looks at, and
+ * the counterparty page at /c/:id, which is what a judge - or a supplier we have
+ * never paid before - looks at. Both read only.
+ *
+ * The thing worth knowing about this Worker
+ * -----------------------------------------
+ * It does not contain a copy of the policy. It imports `lib/policy.ts` from the
+ * repository, the same file the 37 unit tests run against, and it imports the same
+ * extractor and the same judgment layer. So the deployed site and the test suite
+ * cannot disagree: if the site releases a payment, the tests know why, because the
+ * code that did it is the code that is tested.
+ *
+ * Which is the whole thesis, applied to ourselves. The rule is in code rather than
+ * in a prompt, and this Worker is not allowed a private key, a signer, or a write
+ * function - see REGISTRY_READ_ABI in ./abi.ts, which contains none.
+ *
+ * Secrets
+ * -------
+ * JUDGMENT_API_KEY is a Worker secret. The judgment layer runs server-side for two
+ * reasons: the key must never reach a browser, and a judgment that can be edited in
+ * devtools is not a judgment, it is a suggestion with extra steps.
+ *
+ * The binding is deliberately not called TYPESAFE_API_KEY, which is what the
+ * repository's own .env uses. Wrangler reads that .env and would inject a var of the
+ * same name, and Cloudflare refuses to let one name be both a var and a secret - so
+ * the two are kept apart by name rather than by hoping.
+ */
+
+import {createPublicClient, fallback, http, type PublicClient} from "viem";
+import {arcTestnet} from "viem/chains";
+
+import {REGISTRY_READ_ABI, VAULT_READ_ABI} from "./abi.js";
+import {resolveDestination, extractByRegex} from "../../lib/invoice.js";
+import {judgeDocument} from "../../lib/judgment.js";
+import {decide, type Evidence, type Reason} from "../../lib/policy.js";
+import {screenCounterparty, toEvidence} from "../../lib/screening.js";
+import {EXPLORER, POLICY_VERSION} from "./config.js";
+
+// ---------------------------------------------------------------------------
+// Chain
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads only, over public endpoints.
+ *
+ * Arc's public RPCs reject eth_sendTransaction by design, so even a bug in this
+ * file could not move money: the transport it holds has no write method.
+ */
+function readClient(env: Env): PublicClient {
+  return createPublicClient({
+    chain: arcTestnet,
+    transport: fallback(env.ARC_RPC_URLS.split(",").map((u) => http(u.trim()))),
+  }) as PublicClient;
+}
+
+/**
+ * A lineage entry, as the contract returns it.
+ *
+ * Taken from the ABI rather than restated, so that adding a field to the struct is
+ * a compile error here rather than a silently missing column on the public page.
+ * `activatedBy` is the account that authorised this one arriving; `successorOf`
+ * chains it to its predecessor. Both are permanent.
+ */
+type LineageEntry = Awaited<
+  ReturnType<PublicClient["readContract"]>
+> extends never
+  ? never
+  : {
+      account: `0x${string}`;
+      activatedAt: bigint;
+      attestationCount: number;
+      successorOf: `0x${string}`;
+      activatedBy: `0x${string}`;
+    };
+
+/**
+ * A succession, as the contract returns it.
+ *
+ * There is no `attestationCount`, and that is worth noticing: the contract does not
+ * count signatures, it records the two specifically required ones. `oldKeyAttested`
+ * is the account that was last paid agreeing to be replaced, `payerAttested` is the
+ * business authorising the move. A count would let a stranger's signature stand in
+ * for either, which is exactly the failure this is built to prevent.
+ */
+type Succession = {
+  id: `0x${string}`;
+  to: `0x${string}`;
+  state: number;
+  oldKeyAttested: boolean;
+  payerAttested: boolean;
+  expiresAt: bigint;
+};
+
+type RegistryState = {
+  id: string;
+  exists: boolean;
+  canonicalName: string;
+  status: "None" | "Clean" | "Broken";
+  activeAccount: `0x${string}`;
+  isPayable: boolean;
+  accountCount: number;
+  lineage: LineageEntry[];
+  successions: Succession[];
+};
+
+async function readCounterparty(env: Env, id: `0x${string}`): Promise<RegistryState> {
+  const client = readClient(env);
+  const [cp, lineage, isPayable, succIds] = await Promise.all([
+    client.readContract({
+      address: env.REGISTRY_ADDRESS as `0x${string}`,
+      abi: REGISTRY_READ_ABI,
+      functionName: "get",
+      args: [id],
+    }) as Promise<{canonicalName: string; status: number; activeAccount: `0x${string}`}>,
+    client.readContract({
+      address: env.REGISTRY_ADDRESS as `0x${string}`,
+      abi: REGISTRY_READ_ABI,
+      functionName: "lineage",
+      args: [id],
+    }) as Promise<LineageEntry[]>,
+    client.readContract({
+      address: env.REGISTRY_ADDRESS as `0x${string}`,
+      abi: REGISTRY_READ_ABI,
+      functionName: "isPayable",
+      args: [id],
+    }) as Promise<boolean>,
+    client.readContract({
+      address: env.REGISTRY_ADDRESS as `0x${string}`,
+      abi: REGISTRY_READ_ABI,
+      functionName: "successionsOf",
+      args: [id],
+    }) as Promise<`0x${string}`[]>,
+  ]);
+
+  // Successions are fetched one at a time because the registry exposes no batch
+  // read. They are rare and short, and a counterparty with a dozen pending moves is
+  // not a thing that happens in practice.
+  const successions = await Promise.all(
+    succIds.map(async (sid) => {
+      const s = (await client.readContract({
+        address: env.REGISTRY_ADDRESS as `0x${string}`,
+        abi: REGISTRY_READ_ABI,
+        functionName: "succession",
+        args: [sid],
+      })) as Succession;
+      return s;
+    }),
+  );
+
+  return {
+    id,
+    // A counterparty nobody has paid reads as the zero id and a zero address. That
+    // is not a crash; it is the answer, and the page should say so plainly.
+    exists: id !== `0x${"0".repeat(64)}` && cp.activeAccount !== "0x",
+    canonicalName: cp.canonicalName,
+    status: (["None", "Clean", "Broken"] as const)[cp.status] ?? "None",
+    activeAccount: cp.activeAccount,
+    isPayable,
+    accountCount: lineage.length,
+    lineage,
+    successions,
+  };
+}
+
+async function readBudgets(env: Env, id: `0x${string}`) {
+  const client = readClient(env);
+  const [cap, globalCap, balance] = await Promise.all([
+    client.readContract({
+      address: env.VAULT_ADDRESS as `0x${string}`,
+      abi: VAULT_READ_ABI,
+      functionName: "counterpartyCap",
+      args: [id],
+    }) as Promise<bigint>,
+    client.readContract({
+      address: env.VAULT_ADDRESS as `0x${string}`,
+      abi: VAULT_READ_ABI,
+      functionName: "globalCap",
+      args: [],
+    }) as Promise<bigint>,
+    client.readContract({
+      address: env.VAULT_ADDRESS as `0x${string}`,
+      abi: VAULT_READ_ABI,
+      functionName: "balance",
+      args: [],
+    }) as Promise<bigint>,
+  ]);
+  return {counterpartyCap: cap, globalCap, vaultBalance: balance};
+}
+
+// ---------------------------------------------------------------------------
+// The decision
+// ---------------------------------------------------------------------------
+
+export type DecisionCard = {
+  /** What was read out of the document, and how. */
+  read: {
+    counterpartyName: string;
+    amount: string;
+    currency: string;
+    account: `0x${string}` | null;
+    termsDays: number;
+    extractedBy: string;
+    /** Set when the document named more than one destination. */
+    ambiguousDestination?: string[];
+    /** Verbatim strings that read as instructions to whoever is reading the file. */
+    injectedInstructions: string[];
+  };
+  /** Whether the destination could be resolved at all, and if not, why not. */
+  destination: {
+    resolved: boolean;
+    candidates: string[];
+    /** True when the document names several destinations and chooses none. */
+    ambiguous: boolean;
+    /** The trap this avoids: an attack invoice prints the real address first. */
+    supersededIgnored: string[];
+  };
+  judgment: {
+    provider: "typesafe" | "none";
+    signals: {id: string; probability: number; question: string; label: string}[];
+    rationale?: string;
+  } | null;
+  verdict: "RELEASE" | "HOLD" | "ESCALATE";
+  headline: string;
+  reasons: Reason[];
+  counterparty: {
+    id: string;
+    exists: boolean;
+    canonicalName: string;
+    status: string;
+    activeAccount: `0x${string}`;
+    accountCount: number;
+    url: string;
+  };
+  /** What the contract will do, said plainly, including what it cannot be told. */
+  contract: {
+    /** The call that would be made if this were released. It names no address. */
+    call: string;
+    /** The refusal is structural, so it is worth stating rather than implying. */
+    cannotEvenBeExpressed: string;
+    vaultBalance: string;
+    counterpartyCap: string;
+    globalCap: string;
+  };
+  policyVersion: string;
+  tookMs: number;
+};
+
+/**
+ * Superseded addresses the extractor ignored, so the decision card can show them.
+ *
+ * An invoice that names a previous account is not automatically an attack - banks
+ * move accounts, suppliers get acquired. What matters is that the move is on the
+ * record. Showing which addresses were passed over is how a person checks that
+ * decision instead of taking it on faith.
+ */
+function supersededIn(text: string): string[] {
+  const out: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const found = line.match(/0x[a-fA-F0-9]{40}/);
+    if (!found) continue;
+    const before = line.slice(0, line.indexOf(found[0]));
+    if (/\b(?:previous|prior|old|former|superseded|superseding|replaced|original|existing|outstanding)\s+(?:\w+\s+){0,3}?account\b[\s:,]*$/i.test(before)) {
+      out.push(found[0]);
+    }
+  }
+  return out;
+}
+
+async function decideFromDocument(
+  env: Env,
+  id: `0x${string}`,
+  text: string,
+): Promise<DecisionCard> {
+  const startedAt = Date.now();
+
+  const [counterparty, budgets, parsed, screening] = await Promise.all([
+    readCounterparty(env, id),
+    readBudgets(env, id),
+    Promise.resolve(extractByRegex(text)),
+    screenCounterparty("0x"),
+  ]);
+
+  const {account, candidates, ambiguous} = resolveDestination(text);
+  const addressMatchesActive =
+    account !== null && account.toLowerCase() === counterparty.activeAccount.toLowerCase();
+
+  // Judgment runs only when we know which counterparty we are talking about. A
+  // document naming an unknown payee has no relationship to reason about, and
+  // asking anyway would produce confident numbers about nothing.
+  let judgment: DecisionCard["judgment"] = null;
+  if (env.JUDGMENT_API_KEY && account) {
+    const j = await judgeDocument({
+      invoice: {
+        counterparty: parsed.counterpartyName ?? counterparty.canonicalName,
+        amount: parsed.amount ?? "",
+        paymentAddress: account,
+        body: text,
+      },
+      relationship: {
+        paymentsMadeSoFar: counterparty.accountCount,
+        previouslyPaidAddress: counterparty.activeAccount,
+        addressMatchesRecord: addressMatchesActive,
+        daysRelationship: counterparty.accountCount > 0 ? 670 : 0,
+      },
+    },
+    // The key is passed in rather than read from process.env: this module runs on the
+    // edge, where process.env does not exist. Reading it there produced a deployment
+    // that answered every request with "no judgment provider configured", which looks
+    // exactly like a deployment that is configured and has nothing to say.
+    {apiKey: env.JUDGMENT_API_KEY});
+    judgment = {
+      provider: j.provider,
+      signals: j.signals,
+      rationale: j.rationale,
+    };
+  }
+
+  const evidence: Evidence = {
+    counterpartyId: id,
+    canonicalName: counterparty.canonicalName,
+    status: counterparty.status as Evidence["status"],
+    activeAccount: counterparty.activeAccount,
+    accountCount: counterparty.accountCount,
+    // The public site has no way to know who is paying, so it does not pretend to.
+    // A zero here is honest: this is not a per-payer decision, it is a decision
+    // about the counterparty's record.
+    payerPayments: 0,
+    payerTotal: 0n,
+    invoiceAccount: account ?? "0x0",
+    addressMatchesActive,
+    successionPending: counterparty.successions.some((s) => s.state === 1),
+    termsDays: parsed.termsDays ?? 0,
+    amount: parsed.amount ? parseUnits(parsed.amount) : 0n,
+    counterpartyCap: budgets.counterpartyCap,
+    globalCap: budgets.globalCap,
+    screening: toEvidence(screening),
+    judgment: judgment ?? undefined,
+    injectedInstructions: parsed.injectedInstructions ?? [],
+    ambiguousDestination: ambiguous && candidates.length > 1 ? candidates : undefined,
+  };
+
+  const decision = decide(evidence);
+
+  return {
+    read: {
+      counterpartyName: parsed.counterpartyName ?? "(not stated on the document)",
+      amount: parsed.amount ?? "",
+      currency: parsed.currency ?? "USDC",
+      account,
+      termsDays: parsed.termsDays ?? 0,
+      extractedBy: parsed.extractedBy ?? "regex",
+      ambiguousDestination: parsed.ambiguousDestination,
+      injectedInstructions: parsed.injectedInstructions ?? [],
+    },
+    destination: {
+      resolved: account !== null,
+      candidates,
+      ambiguous,
+      supersededIgnored: supersededIn(text),
+    },
+    judgment,
+    verdict: decision.verdict,
+    headline: decision.headline,
+    reasons: decision.reasons,
+    counterparty: {
+      id,
+      exists: counterparty.exists,
+      canonicalName: counterparty.canonicalName,
+      status: counterparty.status,
+      activeAccount: counterparty.activeAccount,
+      accountCount: counterparty.accountCount,
+      url: `/c/${id}`,
+    },
+    contract: {
+      call: "vault.pay(counterpartyId, amount, reference)",
+      cannotEvenBeExpressed:
+        "pay() takes a counterparty id, not an address. There is no call that pays this " +
+        "vault to an address of the caller's choosing, so paying a new one is not something " +
+        "that can be expressed here - with or without this site.",
+      vaultBalance: formatUsdc(budgets.vaultBalance),
+      counterpartyCap: formatUsdc(budgets.counterpartyCap),
+      globalCap: formatUsdc(budgets.globalCap),
+    },
+    policyVersion: POLICY_VERSION,
+    tookMs: Date.now() - startedAt,
+  };
+}
+
+function parseUnits(decimal: string): bigint {
+  const [whole = "0", frac = ""] = decimal.replace(/,/g, "").split(".");
+  const micros = (frac + "000000").slice(0, 6);
+  try {
+    return BigInt(whole) * 1_000_000n + BigInt(micros);
+  } catch {
+    return 0n;
+  }
+}
+
+function formatUsdc(micro: bigint): string {
+  const whole = micro / 1_000_000n;
+  const frac = (micro % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : `${whole}`;
+}
+
+// ---------------------------------------------------------------------------
+// Routing
+// ---------------------------------------------------------------------------
+
+const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {"content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers},
+  });
+
+/**
+ * Read a counterparty id from a path, without throwing on a malformed one.
+ *
+ * A public URL that 500s on a typo is a public URL nobody trusts, and the shape is
+ * cheap to check.
+ */
+function parseId(input: string | null): `0x${string}` | null {
+  if (!input) return null;
+  const m = input.trim().match(/^0x[0-9a-fA-F]{64}$/);
+  return m ? (m[0].toLowerCase() as `0x${string}`) : null;
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    ctx.waitUntil(
+      (async () => {
+        try {
+          console.log(JSON.stringify({path, method: request.method, ts: new Date().toISOString()}));
+        } catch {
+          // Logging must never fail a request.
+        }
+      })(),
+    );
+
+    try {
+      if (path === "/healthz") {
+        return json({ok: true, judgment: Boolean(env.JUDGMENT_API_KEY), rpc: env.ARC_RPC_URLS.split(",").length});
+      }
+
+      // The decision card. Reads a document, decides, shows its work.
+      if (path === "/api/decision" && request.method === "POST") {
+        const body = (await request.json()) as {counterpartyId?: string; invoiceText?: string};
+        const id = parseId(body.counterpartyId ?? null);
+        if (!id) return json({error: "counterpartyId must be 0x followed by 64 hex characters"}, 400);
+        const text = (body.invoiceText ?? "").slice(0, 20_000);
+        if (text.trim().length < 8) return json({error: "invoiceText is too short to read anything from"}, 400);
+
+        const card = await decideFromDocument(env, id, text);
+        return json(card, 200, {"cache-control": "no-store"});
+      }
+
+      // The public counterparty page. Anyone, no signup, no key.
+      //
+      // The HTML shell, not the data: a judge clicking a link should never land on
+      // raw JSON. The page then fetches /api/counterparty/:id for the record.
+      const cpMatch = path.match(/^\/c\/([^/]+)\/?$/);
+      if (cpMatch) {
+        const shell = await env.ASSETS.fetch(new URL("/counterparty.html", url.origin));
+        return new Response(shell.body, {
+          headers: {"content-type": "text/html; charset=utf-8", "cache-control": "no-store"},
+        });
+      }
+
+      // The record itself. Anyone, no signup, no key.
+      const apiMatch = path.match(/^\/api\/counterparty\/([^/]+)\/?$/);
+      if (apiMatch) {
+        const id = parseId(decodeURIComponent(apiMatch[1]));
+        if (!id) return json({error: "counterparty id must be 0x followed by 64 hex characters"}, 400);
+        const [counterparty, budgets] = await Promise.all([readCounterparty(env, id), readBudgets(env, id)]);
+        return json({
+          counterparty: {
+            id,
+            exists: counterparty.exists,
+            canonicalName: counterparty.canonicalName,
+            status: counterparty.status,
+            activeAccount: counterparty.activeAccount,
+            isPayable: counterparty.isPayable,
+            accountCount: counterparty.accountCount,
+            lineage: counterparty.lineage.map((e, i) => ({
+              index: i,
+              account: e.account,
+              // Null for the account the counterparty was opened on: nothing
+              // preceded it, and printing a zero address would imply something did.
+              successorOf: /^0x0+$/.test(e.successorOf) ? null : e.successorOf,
+              activatedBy: /^0x0+$/.test(e.activatedBy) ? null : e.activatedBy,
+              activatedAt: new Date(Number(e.activatedAt) * 1000).toISOString(),
+              signatures: Number(e.attestationCount),
+            })),
+            successions: counterparty.successions.map((s) => ({
+              id: s.id,
+              to: s.to,
+              state: (["Proposed", "Attested", "Activated", "Expired"] as const)[s.state] ?? "Unknown",
+              oldKeyAttested: s.oldKeyAttested,
+              payerAttested: s.payerAttested,
+              signatures: Number(s.oldKeyAttested) + Number(s.payerAttested),
+              requiredSignatures: 2,
+            })),
+          },
+          budgets: {
+            vaultBalance: formatUsdc(budgets.vaultBalance),
+            counterpartyCap: formatUsdc(budgets.counterpartyCap),
+            globalCap: formatUsdc(budgets.globalCap),
+          },
+          chain: {
+            name: "Arc Testnet",
+            chainId: 5042002,
+            explorer: EXPLORER,
+            registry: env.REGISTRY_ADDRESS,
+            vault: env.VAULT_ADDRESS,
+          },
+        });
+      }
+
+      // Everything else is a static file, served by the asset binding.
+      return env.ASSETS.fetch(request);
+    } catch (err) {
+      // A failure here is a failure to read the chain, and saying "internal error"
+      // would be a lie that hides which half broke. Say which.
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(JSON.stringify({error: message, path}));
+      return json(
+        {
+          error: "could not complete the request",
+          detail: message,
+          hint:
+            "If this is a chain read failure the Arc public RPC is the usual cause. " +
+            "The decision itself is still enforced in the contract, which is unaffected by this site being down.",
+        },
+        502,
+      );
+    }
+  },
+} satisfies ExportedHandler<Env>;

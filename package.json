@@ -10,11 +10,7 @@
     "node": ">=22.5.0"
   },
   "scripts": {
-    "dev": "next dev -p 3939",
-    "build": "next build",
-    "start": "next start -p 3939",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
     "contract:build": "cd contracts && forge build",
@@ -25,18 +21,19 @@
     "check:circle": "tsx scripts/check-circle.ts",
     "check:chain": "tsx scripts/check-chain.ts",
     "faucet": "tsx scripts/faucet.ts",
-    "demo:circle": "tsx scripts/demo-circle.ts"
+    "demo:circle": "tsx scripts/demo-circle.ts",
+    "site:dev": "wrangler dev --port 8787 --ip 127.0.0.1",
+    "site:deploy": "wrangler deploy --env-file worker/empty.env",
+    "site:types": "wrangler types --env-file worker/empty.env",
+    "site:secret": "wrangler secret put JUDGMENT_API_KEY",
+    "sync:site": "tsx scripts/sync-worker-config.ts",
+    "abi:read": "tsx scripts/gen-read-abi.ts",
+    "check": "pnpm typecheck && pnpm test && pnpm contract:test"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^4.6.0",
-    "@circle-fin/smart-contract-platform": "^4.3.0",
-    "@circle-fin/app-kit": "latest",
-    "@tanstack/react-query": "^5.62.0",
-    "next": "^15.1.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
     "viem": "^2.21.0",
-    "zod": "^3.24.0"
+    "@circle-fin/smart-contract-platform": "^4.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -44,7 +41,8 @@
     "@types/react-dom": "^19.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "wrangler": "^4.144.0"
   },
   "author": "PhiBao",
   "repository": {

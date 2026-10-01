@@ -160,10 +160,13 @@ async function main() {
   })) as bigint;
   note(`wallet holds ${formatUsdc(bal)} USDC`);
 
-  // The demo makes three payments: 0.40 + 2.40 + 0.10. Fund exactly that, up front.
-  const need = PAY_FIRST + PAY_SECOND + usdc(0.1) + usdc(0.5); // + headroom for the refused-case simulations
+  // The two real payments, plus a reserve for the attempts that are *supposed* to
+  // fail. Those revert, so they cost gas and nothing else - but the reserve is
+  // sized off the payment so it scales with whatever this run is configured to do.
+  const reserve = PAY_SECOND / 4n + usdc(0.1);
+  const need = PAY_FIRST + PAY_SECOND + reserve;
 
-  if (bal < need + usdc(0.2)) {
+  if (bal < need) {
     console.error(
       `\n  Not enough USDC to run the demo.\n` +
         `  wallet  ${account.address}\n` +
@@ -283,7 +286,7 @@ async function main() {
   // ---------------------------------------------------------------------
   t("The attack. A new account arrives on the invoice, with no ceremony behind it.");
   note("The invoice asks for a different account. Nothing has signed for the move.");
-  const attackDoc = buildInvoice("attack", {payTo: VENDOR_NEW, prior: VENDOR, amount: "2400.00"});
+  const attackDoc = buildInvoice("attack", {payTo: VENDOR_NEW, prior: VENDOR, amount: formatUsdc(PAY_SECOND)});
   const read = readInvoice(attackDoc);
   note("read " + read.amount + " USDC for " + read.counterpartyName + ", payable to " + short(read.account ?? "0x"));
 
@@ -358,7 +361,7 @@ async function main() {
 
   // ---------------------------------------------------------------------
   t("Pay the new account. Now it is on the record.");
-  const movedDoc = buildInvoice("afterMove", {payTo: VENDOR_NEW, amount: "180.00"});
+  const movedDoc = buildInvoice("afterMove", {payTo: VENDOR_NEW, amount: formatUsdc(PAY_SECOND)});
   const read2 = readInvoice(movedDoc);
   note("read " + read2.amount + " USDC, payable to " + short(read2.account ?? "0x"));
 
@@ -491,8 +494,19 @@ const minBig = (a: bigint, b: bigint): bigint => (a < b ? a : b);
  * record. Re-deploying gives a new set of contracts and a fresh story.
  */
 const COUNTERPARTY_NAME = process.env.HOROS_DEMO_COUNTERPARTY ?? "Northwind Plumbing Ltd";
-const PAY_FIRST = usdc(0.4); // the ordinary invoice
-const PAY_SECOND = usdc(2.4); // the invoice that arrives with a new account
+/**
+ * What the two invoices are for.
+ *
+ * Overridable so the demo can be seeded on a testnet where the faucet is a human
+ * clicking a captcha. The defaults are the ones the narrative wants: a small
+ * routine invoice, then a much larger one that arrives with a new account attached,
+ * which is how the real thing looks - the redirect always carries urgency.
+ *
+ * Whatever these are, the invoice text is generated from them, so the number on the
+ * document and the number that moves are the same number.
+ */
+const PAY_FIRST = usdc(Number(process.env.HOROS_DEMO_PAY_FIRST ?? 0.4));
+const PAY_SECOND = usdc(Number(process.env.HOROS_DEMO_PAY_SECOND ?? 2.4));
 const COUNTERPARTY_CAP = usdc(10); // what we allow this vendor per payment
 
 /**
