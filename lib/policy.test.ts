@@ -68,7 +68,7 @@ describe("the policy decides, the model only proposes", () => {
         accountCount: 2,
         judgment: {
           provider: "typesafe",
-          signals: [{id: "suppresses_verification", probability: 0.98, question: "q", label: "discourages checking"}],
+          signals: [{id: "suppresses_verification", probability: 0.98, question: "q", label: "discourages checking", concerns_when: "high"}],
           rationale: "it discourages checking the payment details (98%)",
         },
       }),
@@ -78,12 +78,77 @@ describe("the policy decides, the model only proposes", () => {
     expect(codes(held)).toContain("UNSIGNED_ACCOUNT_CHANGE");
   });
 
+  // The bug this pins: one of the four questions is asked in the reassuring
+  // direction - "is this an ordinary invoice" - so a HIGH answer means the document
+  // is fine. Treating every signal as risk-if-high stopped a payment that was, by
+  // the model's own reading, entirely routine. It survived the first live run only
+  // because that value happened to come back low.
+  it("does NOT escalate when the reassuring signal comes back high", () => {
+    const d = decide(
+      ev({
+        judgment: {
+          provider: "typesafe",
+          signals: [
+            {
+              id: "is_ordinary",
+              probability: 0.66,
+              question: "Is this an ordinary invoice?",
+              label: "does not read like a routine invoice",
+              concerns_when: "low",
+            },
+          ],
+          rationale: "the document does not read like a routine invoice (34% likely)",
+        },
+      }),
+    );
+    expect(d.verdict).toBe("RELEASE");
+    expect(codes(d)).not.toContain("DOCUMENT_IS_ORDINARY");
+  });
+
+  it("escalates when that same signal comes back low, because then it does concern us", () => {
+    const d = decide(
+      ev({
+        judgment: {
+          provider: "typesafe",
+          signals: [
+            {
+              id: "is_ordinary",
+              probability: 0.01,
+              question: "Is this an ordinary invoice?",
+              label: "does not read like a routine invoice",
+              concerns_when: "low",
+            },
+          ],
+        },
+      }),
+    );
+    expect(codes(d)).toContain("DOCUMENT_IS_ORDINARY");
+  });
+
+  it("reads an ordinary invoice with a high reassuring signal as releasable", () => {
+    // The full set as a clean document returns it. Not one of these is concerning.
+    const d = decide(
+      ev({
+        judgment: {
+          provider: "typesafe",
+          signals: [
+            {id: "is_ordinary", probability: 0.61, question: "q", label: "not routine", concerns_when: "low"},
+            {id: "addressed_to_reader", probability: 0.11, question: "q", label: "addressed to reader", concerns_when: "high"},
+            {id: "suppresses_verification", probability: 0.03, question: "q", label: "discourages checking", concerns_when: "high"},
+            {id: "asks_for_secrecy", probability: 0.02, question: "q", label: "secrecy", concerns_when: "high"},
+          ],
+        },
+      }),
+    );
+    expect(d.verdict).toBe("RELEASE");
+  });
+
   it("escalates on a strong judgment signal even when the policy would have released", () => {
     const d = decide(
       ev({
         judgment: {
           provider: "typesafe",
-          signals: [{id: "suppresses_verification", probability: 0.98, question: "q", label: "discourages checking"}],
+          signals: [{id: "suppresses_verification", probability: 0.98, question: "q", label: "discourages checking", concerns_when: "high"}],
           rationale: "it discourages checking the payment details (98%)",
         },
       }),

@@ -36,10 +36,11 @@ import {arcTestnet} from "viem/chains";
 
 import {REGISTRY_READ_ABI, VAULT_READ_ABI} from "./abi.js";
 import {resolveDestination, extractByRegex} from "../../lib/invoice.js";
-import {judgeDocument} from "../../lib/judgment.js";
+import {concern, judgeDocument} from "../../lib/judgment.js";
 import {decide, type Evidence, type Reason} from "../../lib/policy.js";
 import {screenCounterparty, toEvidence} from "../../lib/screening.js";
 import {EXPLORER, POLICY_VERSION} from "./config.js";
+import {labelStatus, labelSuccessionState} from "../../lib/enums.js";
 
 // ---------------------------------------------------------------------------
 // Chain
@@ -100,7 +101,9 @@ type RegistryState = {
   id: string;
   exists: boolean;
   canonicalName: string;
-  status: "None" | "Clean" | "Broken";
+  /** The raw code, kept so the evidence layer can label it in one place. */
+  statusCode: number;
+  status: string;
   activeAccount: `0x${string}`;
   isPayable: boolean;
   accountCount: number;
@@ -158,7 +161,8 @@ async function readCounterparty(env: Env, id: `0x${string}`): Promise<RegistrySt
     // is not a crash; it is the answer, and the page should say so plainly.
     exists: id !== `0x${"0".repeat(64)}` && cp.activeAccount !== "0x",
     canonicalName: cp.canonicalName,
-    status: (["None", "Clean", "Broken"] as const)[cp.status] ?? "None",
+    statusCode: cp.status,
+    status: labelStatus(cp.status),
     activeAccount: cp.activeAccount,
     isPayable,
     accountCount: lineage.length,
@@ -219,11 +223,14 @@ export type DecisionCard = {
     /** The trap this avoids: an attack invoice prints the real address first. */
     supersededIgnored: string[];
   };
-  judgment: {
-    provider: "typesafe" | "none";
-    signals: {id: string; probability: number; question: string; label: string}[];
-    rationale?: string;
-  } | null;
+  judgment: Evidence["judgment"] | null;
+  /**
+   * The same signals, oriented so that a high number always means "more
+   * concerning" - which is the direction the policy thresholds and the direction
+   * the card draws. Shipped alongside rather than computed in the browser, because
+   * a second implementation of the polarity rule is a second chance to invert it.
+   */
+  concerns: {id: string; label: string; probability: number; raw: number}[];
   verdict: "RELEASE" | "HOLD" | "ESCALATE";
   headline: string;
   reasons: Reason[];
@@ -231,6 +238,8 @@ export type DecisionCard = {
     id: string;
     exists: boolean;
     canonicalName: string;
+    /** Canonical name in title case, for reading. The hash is over the lowercase form. */
+    displayName: string;
     status: string;
     activeAccount: `0x${string}`;
     accountCount: number;
@@ -293,6 +302,7 @@ async function decideFromDocument(
   // document naming an unknown payee has no relationship to reason about, and
   // asking anyway would produce confident numbers about nothing.
   let judgment: DecisionCard["judgment"] = null;
+  let concerns: DecisionCard["concerns"] = [];
   if (env.JUDGMENT_API_KEY && account) {
     const j = await judgeDocument({
       invoice: {
@@ -318,12 +328,13 @@ async function decideFromDocument(
       signals: j.signals,
       rationale: j.rationale,
     };
+    concerns = j.signals.map((s) => ({id: s.id, label: s.label, probability: concern(s), raw: s.probability}));
   }
 
   const evidence: Evidence = {
     counterpartyId: id,
     canonicalName: counterparty.canonicalName,
-    status: counterparty.status as Evidence["status"],
+    status: (labelStatus(counterparty.statusCode) as Evidence["status"]),
     activeAccount: counterparty.activeAccount,
     accountCount: counterparty.accountCount,
     // The public site has no way to know who is paying, so it does not pretend to.
@@ -364,6 +375,7 @@ async function decideFromDocument(
       supersededIgnored: supersededIn(text),
     },
     judgment,
+    concerns,
     verdict: decision.verdict,
     headline: decision.headline,
     reasons: decision.reasons,
@@ -371,6 +383,7 @@ async function decideFromDocument(
       id,
       exists: counterparty.exists,
       canonicalName: counterparty.canonicalName,
+      displayName: titleCase(counterparty.canonicalName),
       status: counterparty.status,
       activeAccount: counterparty.activeAccount,
       accountCount: counterparty.accountCount,
@@ -389,6 +402,17 @@ async function decideFromDocument(
     policyVersion: POLICY_VERSION,
     tookMs: Date.now() - startedAt,
   };
+}
+
+/**
+ * The registry stores names lowercased, because the hash is what identifies a
+ * counterparty and "Northwind" and "northwind" must not be two records. Reading it
+ * back verbatim makes the page look broken rather than canonical, so the display
+ * form restores the capitals and the raw value stays in the payload for anyone who
+ * wants to check the hash.
+ */
+function titleCase(s: string): string {
+  return s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
 }
 
 function parseUnits(decimal: string): bigint {
@@ -484,6 +508,7 @@ export default {
             id,
             exists: counterparty.exists,
             canonicalName: counterparty.canonicalName,
+            displayName: titleCase(counterparty.canonicalName),
             status: counterparty.status,
             activeAccount: counterparty.activeAccount,
             isPayable: counterparty.isPayable,
@@ -501,7 +526,7 @@ export default {
             successions: counterparty.successions.map((s) => ({
               id: s.id,
               to: s.to,
-              state: (["Proposed", "Attested", "Activated", "Expired"] as const)[s.state] ?? "Unknown",
+              state: labelSuccessionState(s.state),
               oldKeyAttested: s.oldKeyAttested,
               payerAttested: s.payerAttested,
               signatures: Number(s.oldKeyAttested) + Number(s.payerAttested),

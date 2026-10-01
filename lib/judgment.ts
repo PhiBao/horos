@@ -51,7 +51,31 @@ export type Signal = {
   question: string;
   /** The same proposition in three or four words, for a decision card. */
   label: string;
+  /**
+   * Which direction of this proposition is the concerning one.
+   *
+   * Not every question is a risk when the answer is high, and treating them as
+   * though it were is a bug that hides well: "is this an ordinary invoice" being
+   * 0.66 means the document is *fine*, and reading it as a reason to stop is
+   * exactly backwards. It survived the first run because the value happened to
+   * come back low.
+   *
+   * "high" - a high probability is the concern (it discourages verification)
+   * "low"  - a low probability is the concern (it is not an ordinary invoice)
+   */
+  concerns_when: "high" | "low";
 };
+
+/**
+ * How concerning this signal is, as a probability, whichever way the question was
+ * asked.
+ *
+ * Folding the direction in here rather than at each use site means the policy only
+ * ever reasons about one orientation, and cannot get it wrong per-signal.
+ */
+export function concern(s: Signal): number {
+  return s.concerns_when === "high" ? s.probability : 1 - s.probability;
+}
 
 export type DocumentJudgment = {
   /** Undefined when no judgment provider is configured or reachable. */
@@ -83,10 +107,22 @@ const API_URL = "https://api.typesafe.ai/v1/systemone";
  * verification is worse than no reason at all.
  */
 const LABELS: Record<string, string> = {
+  // Written as the concern, not as the question, because that is how the decision
+  // card reads them: "does not read like a routine invoice (99%)" rather than
+  // "is an ordinary invoice (1%)", which is the same fact phrased to be missed.
   is_ordinary: "does not read like a routine invoice",
   addressed_to_reader: "contains text addressed to whoever is reading it",
   suppresses_verification: "discourages checking the payment details",
   asks_for_secrecy: "asks for the arrangement to be kept quiet",
+};
+
+/** Which direction of each question is the one worth stopping for. */
+const CONCERNS_WHEN: Record<string, "high" | "low"> = {
+  // The only inverted one: a high probability here is reassurance.
+  is_ordinary: "low",
+  addressed_to_reader: "high",
+  suppresses_verification: "high",
+  asks_for_secrecy: "high",
 };
 
 const QUESTIONS = {
@@ -211,7 +247,13 @@ export async function judgeDocument(
       .map(([id, q]) => {
         const n = json.answers?.[id]?.noul;
         return typeof n === "number"
-          ? {id, probability: n, question: q.instructions, label: LABELS[id] ?? q.instructions}
+          ? {
+              id,
+              probability: n,
+              question: q.instructions,
+              label: LABELS[id] ?? q.instructions,
+              concerns_when: CONCERNS_WHEN[id] ?? "high",
+            }
           : null;
       })
       .filter((s): s is Signal => s !== null);
@@ -240,15 +282,15 @@ export async function judgeDocument(
  * model contributes is a reason to ask a person a question.
  */
 function advisoryVerdict(signals: Signal[]): Verdict | undefined {
-  const raised = signals.filter((s) => s.probability > ESCALATE_ABOVE);
+  const raised = signals.filter((s) => concern(s) > ESCALATE_ABOVE);
   if (raised.length === 0) return undefined;
   return "ESCALATE";
 }
 
 /** The single most load-bearing observation, in words, for the decision card. */
 function summarise(signals: Signal[]): string | undefined {
-  const worst = [...signals].sort((a, b) => b.probability - a.probability)[0];
-  if (!worst || worst.probability <= ESCALATE_ABOVE) return undefined;
-  const pct = Math.round(worst.probability * 100);
+  const worst = [...signals].sort((a, b) => concern(b) - concern(a))[0];
+  if (!worst || concern(worst) <= ESCALATE_ABOVE) return undefined;
+  const pct = Math.round(concern(worst) * 100);
   return `the document ${worst.label} (${pct}% likely)`;
 }

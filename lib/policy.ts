@@ -17,6 +17,8 @@
  * the release path.
  */
 
+import {concern, type Signal} from "./judgment.js";
+
 export type Verdict = "RELEASE" | "HOLD" | "ESCALATE";
 
 export type Reason = {
@@ -59,7 +61,7 @@ export type Evidence = {
    */
   judgment?: {
     provider: "typesafe" | "none";
-    signals: {id: string; probability: number; question: string; label: string}[];
+    signals: {id: string; probability: number; question: string; label: string; concerns_when: "high" | "low"}[];
     rationale?: string;
   };
 
@@ -106,6 +108,10 @@ export const POLICY_VERSION = "1.1.0";
 
 /**
  * Above this calibrated probability, a document signal escalates the payment.
+ *
+ * Applied to the signal's *concern* probability, not its raw answer - see
+ * lib/judgment.ts. Each question declares which direction of itself is the worrying
+ * one, so one inverted question cannot invert the whole decision.
  *
  * Deliberately at 0.5, not 0.9. The cost of a false positive is one question to a
  * person; the cost of a false negative is money sent to whoever wrote the
@@ -184,11 +190,17 @@ export function decide(ev: Evidence): Decision {
   // would make the agent nag; ignoring a strong one would make it decorative.
   if (ev.judgment?.provider === "typesafe") {
     for (const signal of ev.judgment.signals) {
-      if (signal.probability < JUDGMENT_ESCALATE_ABOVE) continue;
+      // Orient every signal the same way before thresholding. One of the four is
+      // asked in the reassuring direction - "is this an ordinary invoice" - so a
+      // high answer there is a reason to relax, not to stop. Reading all four as
+      // risk-if-high is backwards for that one, and the mistake is invisible until
+      // the value happens to cross the threshold.
+      const concerning = concern(signal);
+      if (concerning < JUDGMENT_ESCALATE_ABOVE) continue;
       reasons.push({
         code: `DOCUMENT_${signal.id.toUpperCase()}`,
         detail:
-          `The document ${signal.label} — judged ${Math.round(signal.probability * 100)}% likely. ` +
+          `The document ${signal.label} — judged ${Math.round(concerning * 100)}% likely. ` +
           `That is a threshold in this file, not a rule in a prompt, and this payment is worth a person looking at it.`,
         blocking: true,
       });

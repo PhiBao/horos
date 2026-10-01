@@ -16,7 +16,7 @@ import {getPublicClient, getLocalSigner, currentNetwork, formatUsdc, explorerTx,
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
 import {decide, type Evidence} from "../lib/policy.js";
 import {screenCounterparty, toEvidence} from "../lib/screening.js";
-import {buildInvoice, judgeInvoice, judgmentLines, readInvoice, type ReadInvoice} from "../lib/demo-invoices.js";
+import {COUNTERPARTY_NAME, buildInvoice, judgeInvoice, judgmentLines, readInvoice, type ReadInvoice} from "../lib/demo-invoices.js";
 
 loadEnv();
 
@@ -493,7 +493,6 @@ const minBig = (a: bigint, b: bigint): bigint => (a < b ? a : b);
  * Names are unique per deployment so a demo run always starts from a clean
  * record. Re-deploying gives a new set of contracts and a fresh story.
  */
-const COUNTERPARTY_NAME = process.env.HOROS_DEMO_COUNTERPARTY ?? "Northwind Plumbing Ltd";
 /**
  * What the two invoices are for.
  *

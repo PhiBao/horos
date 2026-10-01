@@ -19,7 +19,7 @@ import {getPublicClient, getLocalSigner, currentNetwork, formatUsdc, explorerTx,
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
 import {decide, type Evidence} from "../lib/policy.js";
 import {screenCounterparty, toEvidence} from "../lib/screening.js";
-import {buildInvoice, judgeInvoice, judgmentLines, readInvoice, type ReadInvoice} from "../lib/demo-invoices.js";
+import {COUNTERPARTY_NAME, buildInvoice, judgeInvoice, judgmentLines, readInvoice, type ReadInvoice} from "../lib/demo-invoices.js";
 import {VENDOR_KEY} from "../lib/demo-keys.js";
 
 loadEnv();
@@ -49,7 +49,6 @@ const usdc = (n: number): bigint => BigInt(Math.floor(n * 10 ** 6));
  */
 const PAY_FIRST = usdc(Number(process.env.HOROS_DEMO_PAY_FIRST ?? 0.4));
 const PAY_SECOND = usdc(Number(process.env.HOROS_DEMO_PAY_SECOND ?? 2.4));
-const COUNTERPARTY_NAME = "Kestrel Facilities Ltd";
 
 let step = 0;
 const t = (m: string) => console.log(`\n\x1b[1m${String(++step).padStart(2, "0")}. ${m}\x1b[0m`);

@@ -49,7 +49,7 @@ function render(data) {
     <div class="verdict-row">
       <h1 class="verdict ${cp.status === "Broken" ? "hold" : "release"}">${cp.status === "Broken" ? "Broken" : "Payable"}</h1>
       <div>
-        <p class="cp-name">${esc(cp.canonicalName || "(unnamed)")}</p>
+        <p class="cp-name">${esc(cp.displayName || cp.canonicalName || "(unnamed)")}</p>
         <p class="mono">${esc(cp.id)}</p>
       </div>
     </div>

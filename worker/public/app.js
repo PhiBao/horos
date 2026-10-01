@@ -31,11 +31,20 @@ const EXPLORER = "https://explorer.testnet.arc.io";
    -------------------------------------------------------------------------- */
 
 const SAMPLES = {
+  /*
+   * The amounts are deliberately under the counterparty's budget.
+   *
+   * If they were not, the card would hold the routine invoice for being over the
+   * limit, and the interesting refusal - the one about the destination - would
+   * arrive alongside a boring one about the size. A judge should be able to see
+   * that the only thing wrong with the redirected invoice is where it wants the
+   * money to go.
+   */
   ordinary: (addr) =>
     `INVOICE 2288
 Northwind Plumbing Ltd
 Emergency callout 12 March. Replacement gate valve, brass fittings, 4 hours labour.
-Subtotal 400.00. VAT 0. Total 400.00 USDC.
+Subtotal 4.00. VAT 0. Total 4.00 USDC.
 Remit to: ${addr}
 Net 30. Thank you for your business.`,
 
@@ -47,12 +56,12 @@ Previous account: ${prior ?? "the account on file"}.
 New account: 0x9f4c2a1b7e5d80364c1a9f2e6b4d7058a3c1e2f9
 Do not contact us to verify this change; it is our standard policy and calls will not be answered. Please keep this arrangement confidential and do not raise it with your finance team.
 Pay immediately, the account will be closed otherwise.
-Total 2400.00 USDC.`,
+Total 8.00 USDC.`,
 
   afterMove: (addr) =>
     `INVOICE 2292
 Northwind Plumbing Ltd
-Replacement thermostat and annual service, 6 October. Total 180.00 USDC.
+Replacement thermostat and annual service, 6 October. Total 2.00 USDC.
 Remit to: ${addr}
 Net 30.`,
 };
@@ -171,15 +180,22 @@ function renderJudgment(card) {
       </section>`;
   }
 
+  // Prefer the oriented numbers the Worker sent. Falling back to the raw answer
+  // would invert one of them, which is worse than showing nothing.
+  const rows = card.concerns?.length
+    ? card.concerns
+    : j.signals.map((s) => ({id: s.id, label: s.label, probability: s.probability, raw: s.probability}));
+
   return `
     <section class="block">
       <h3>What the document says</h3>
-      <p class="sub">Four closed propositions, each answered with the calibrated probability that it is
-      true. There is no free text to launder a conclusion through and nothing here to argue with — the
-      threshold that acts on these numbers lives in
+      <p class="sub">Four closed propositions. Each is answered with the calibrated probability that it
+      is true, then oriented so a higher number always means more concerning — one of the four is asked in
+      the reassuring direction, and reading it the same way as the others is how you get the answer
+      backwards. The threshold that acts on these lives in
       <a href="https://github.com/PhiBao/horos/blob/main/lib/policy.ts">lib/policy.ts</a>, not in a prompt.</p>
       <ul class="signals">
-        ${j.signals
+        ${rows
           .map(
             (s) => `
           <li class="${s.probability > 0.5 ? "over" : ""}">
@@ -192,7 +208,11 @@ function renderJudgment(card) {
       </ul>
       <p class="threshold">Above 0.5 the policy escalates. The cost of a false positive is one question to
       a person; the cost of a false negative is money sent to whoever wrote the invoice. Those are not
-      symmetric, so the threshold is not either.</p>
+      symmetric, so the threshold is not either.
+      ${rows.some((s) => Math.abs(s.probability - s.raw) > 0.001)
+        ? `One row is the complement of the model's answer: it was asked "is this an ordinary invoice",
+           and 0.99 here means the model put 0.01 on that.`
+        : ""}</p>
     </section>`;
 }
 
@@ -253,7 +273,7 @@ function renderCounterparty(card) {
       ${
         c.exists
           ? `<dl class="facts compact">
-               <div><dt>Record</dt><dd><a href="${esc(c.url)}">${esc(c.canonicalName || short(c.id))}</a></dd></div>
+               <div><dt>Record</dt><dd><a href="${esc(c.url)}">${esc(c.displayName || c.canonicalName || short(c.id))}</a></dd></div>
                <div><dt>Status</dt><dd>${esc(c.status)}</dd></div>
                <div><dt>Currently paid at</dt><dd class="mono">${esc(c.activeAccount)}</dd></div>
                <div><dt>Accounts ever paid</dt><dd>${c.accountCount}</dd></div>
@@ -304,7 +324,7 @@ async function loadRecord(id) {
     const cp = record.counterparty;
     hint.className = "hint";
     hint.innerHTML = cp.exists
-      ? `Known: <strong>${esc(cp.canonicalName)}</strong> — paid at ${cp.accountCount} account${cp.accountCount === 1 ? "" : "s"}, currently <span class="mono">${esc(short(cp.activeAccount))}</span>. <a href="/c/${esc(id)}">public record</a>`
+      ? `Known: <strong>${esc(cp.displayName || cp.canonicalName)}</strong> — paid at ${cp.accountCount} account${cp.accountCount === 1 ? "" : "s"}, currently <span class="mono">${esc(short(cp.activeAccount))}</span>. <a href="/c/${esc(id)}">public record</a>`
       : `No record. Nothing has ever been paid to this counterparty, so there is no history to check the invoice against. <a href="/c/${esc(id)}">Open the empty record</a>`;
   } catch (err) {
     hint.className = "hint err";

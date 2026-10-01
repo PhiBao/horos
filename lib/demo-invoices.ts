@@ -32,6 +32,21 @@ export type ReadInvoice = Invoice & {doc: InvoiceDoc};
 export type InvoiceKind = "ordinary" | "attack" | "afterMove";
 
 /**
+ * The counterparty every demo registers and every fixture invoices.
+ *
+ * One constant rather than a name per script. It was two before - the Circle demo
+ * registered "Kestrel Facilities Ltd" while the fixtures it printed invoices for
+ * said "Northwind Plumbing Ltd" - which meant the demo's own document named a
+ * counterparty that had nothing to do with the record it was checking it against.
+ * A demo whose invoice and database disagree about who is being paid is
+ * demonstrating the bug it claims to prevent.
+ *
+ * Overridable so a run can use a fresh record without redeploying, since names are
+ * unique per deployment and a taken name is a skipped step.
+ */
+export const COUNTERPARTY_NAME = process.env.HOROS_DEMO_COUNTERPARTY ?? "Northwind Plumbing Ltd";
+
+/**
  * Build the document for one step of the story.
  *
  * The payment address is written *into the body* rather than passed alongside it,
@@ -44,7 +59,7 @@ export function buildInvoice(
   opts: {payTo: `0x${string}`; prior?: `0x${string}`; amount?: string},
 ): InvoiceDoc {
   const {payTo, prior, amount = "400.00"} = opts;
-  const counterparty = "Northwind Plumbing Ltd";
+  const counterparty = COUNTERPARTY_NAME;
 
   if (kind === "ordinary") {
     return {

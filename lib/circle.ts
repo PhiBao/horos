@@ -131,3 +131,87 @@ export async function walletBalance(address: `0x${string}`): Promise<bigint> {
     args: [address],
   })) as bigint;
 }
+
+/**
+ * Wait for a Circle transaction to settle.
+ *
+ * The terminal success state is COMPLETE, not CONFIRMED — CONFIRMED means the
+ * transaction is mined but not yet finalised, and polling for it makes a working
+ * integration look broken.
+ *
+ * Returns the hash rather than calling process.exit, so this is usable from
+ * anything that is not a top-level script. The demo scripts decide how loud they
+ * want to be about a failure; this only reports it.
+ */
+const SETTLED = new Set(["COMPLETE", "CONFIRMED"]);
+const FAILED = new Set(["FAILED", "DENIED", "CANCELLED"]);
+
+export type SettleResult =
+  | {ok: true; state: string; txHash?: `0x${string}`}
+  | {ok: false; state: string; reason: string};
+
+export async function settleCircleTransaction(
+  client: ReturnType<typeof circleClient>,
+  transactionId: string,
+  opts: {timeoutMs?: number; onState?: (state: string) => void} = {},
+): Promise<SettleResult> {
+  const deadline = Date.now() + (opts.timeoutMs ?? 120_000);
+  let lastState = "";
+
+  while (Date.now() < deadline) {
+    const r = await client.getTransaction({id: transactionId});
+    const tx = r.data?.transaction;
+    const state = tx?.state ?? "unknown";
+    if (state !== lastState) {
+      opts.onState?.(state);
+      lastState = state;
+    }
+    if (SETTLED.has(state)) {
+      return {ok: true, state, txHash: (tx as {txHash?: `0x${string}`}).txHash};
+    }
+    if (FAILED.has(state)) {
+      const reason = (tx as unknown as {error?: {message?: string}})?.error?.message ?? "";
+      return {ok: false, state, reason};
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return {ok: false, state: lastState, reason: "timed out waiting for a terminal state"};
+}
+
+/**
+ * Sign and submit a contract call through Circle.
+ *
+ * Two details that are easy to get wrong and hard to diagnose, both found by
+ * running it: `abiJson` must be a JSON *string* rather than an object, and `fee`
+ * must be `{type, config:{...}}` because the SDK spreads `fee.config` into the
+ * request. A bare `{feeLevel}` is silently dropped and the call is rejected for
+ * want of a fee.
+ *
+ * The key this signs with is Circle's. The caller never holds one, which is the
+ * whole point of the agent wallet and the reason the agent cannot redirect a
+ * payment even when it is fully compromised.
+ */
+export async function circleExecute(
+  client: ReturnType<typeof circleClient>,
+  args: {
+    walletId: string;
+    blockchain: string;
+    contractAddress: `0x${string}`;
+    abi: unknown;
+    abiFunctionSignature: string;
+    abiParameters: unknown[];
+  },
+): Promise<string> {
+  const res = await client.createContractExecutionTransaction({
+    walletId: args.walletId,
+    blockchain: args.blockchain,
+    contractAddress: args.contractAddress,
+    abiJson: JSON.stringify(args.abi) as never,
+    abiFunctionSignature: args.abiFunctionSignature,
+    abiParameters: args.abiParameters as never,
+    fee: {type: "level", config: {feeLevel: "MEDIUM"}},
+  } as never);
+  const id = res.data?.id;
+  if (!id) throw new Error("Circle did not return a transaction id");
+  return id;
+}
