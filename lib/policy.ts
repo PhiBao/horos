@@ -272,9 +272,18 @@ export function decide(ev: Evidence): Decision {
       reasons.push({
         code: "UNSIGNED_ACCOUNT_CHANGE",
         detail:
-          `This invoice asks us to pay an address we have never paid. We have paid this counterparty ` +
-          `${ev.payerPayments} time${ev.payerPayments === 1 ? "" : "s"} across ` +
-          `${ev.accountCount} established account${ev.accountCount === 1 ? "" : "s"}. ` +
+          // Phrased around the counterparty's history rather than the payer's, so it
+          // reads correctly on the public page, where nobody has a payer identity and
+          // a count of zero would claim "we have paid this 0 times" about a
+          // counterparty with two accounts behind it.
+          `This invoice asks us to pay an address that has never been paid. ` +
+          (ev.payerPayments > 0
+            ? `We have paid this counterparty ${ev.payerPayments} time${ev.payerPayments === 1 ? "" : "s"}. `
+            : "") +
+          (ev.accountCount > 0
+            ? `${ev.accountCount} account${ev.accountCount === 1 ? " has" : "s have"} been paid at some point, ` +
+              `and this is not one of them. `
+            : `Nobody has ever paid this counterparty. `) +
           `A new address is a request to move money somewhere new, and nothing has signed for it.`,
         blocking: true,
       });

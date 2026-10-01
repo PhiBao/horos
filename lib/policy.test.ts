@@ -177,7 +177,7 @@ describe("the policy decides, the model only proposes", () => {
     expect(d.verdict).toBe("HOLD");
     expect(codes(d)).toContain("UNSIGNED_ACCOUNT_CHANGE");
     expect(d.reasons.find((r) => r.code === "UNSIGNED_ACCOUNT_CHANGE")!.detail).toMatch(
-      /14 times across 3 established accounts/,
+      /We have paid this counterparty 14 times\. 3 accounts have been paid/,
     );
   });
 

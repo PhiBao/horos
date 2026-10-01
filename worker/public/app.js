@@ -334,10 +334,10 @@ async function loadRecord(id) {
 }
 
 function applySample(kind) {
-  const addr = $("cp").value.trim();
+  const addr = $("#cp").value.trim();
   const prior = record?.counterparty?.activeAccount ?? null;
   const payTo = /^0x[0-9a-fA-F]{40}$/.test(addr) ? addr : (prior ?? "0x0000000000000000000000000000000000000000");
-  $("text").value = SAMPLES[kind](payTo, prior);
+  $("#text").value = SAMPLES[kind](payTo, prior);
   $("#result").hidden = true;
 }
 
