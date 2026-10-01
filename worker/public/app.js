@@ -86,7 +86,7 @@ function renderHeadline(card) {
         : `<p class="escalated">This needs a person. It was not paid automatically.</p>`;
 
   return `
-    <div class="verdict-row">
+    <div class="verdict-row" data-block="verdict">
       <h2 class="verdict ${verdictClass(card.verdict)}">${esc(card.verdict)}</h2>
       <div>
         <p class="headline">${esc(card.headline)}</p>
@@ -113,7 +113,7 @@ function renderReading(card) {
   ];
 
   return `
-    <section class="block">
+    <section class="block" data-block="reading">
       <h3>What the agent read</h3>
       <dl class="facts compact">
         ${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}
@@ -187,7 +187,7 @@ function renderJudgment(card) {
     : j.signals.map((s) => ({id: s.id, label: s.label, probability: s.probability, raw: s.probability}));
 
   return `
-    <section class="block">
+    <section class="block" data-block="judgment">
       <h3>What the document says</h3>
       <p class="sub">Four closed propositions. Each is answered with the calibrated probability that it
       is true, then oriented so a higher number always means more concerning — one of the four is asked in
@@ -221,7 +221,7 @@ function renderReasons(card) {
   const blocking = card.reasons.filter((r) => r.blocking);
   const notes = card.reasons.filter((r) => !r.blocking);
   return `
-    <section class="block">
+    <section class="block" data-block="reasons">
       <h3>Why</h3>
       ${
         blocking.length
@@ -253,7 +253,7 @@ function renderReasons(card) {
 function renderContract(card) {
   const c = card.contract;
   return `
-    <section class="block">
+    <section class="block" data-block="contract">
       <h3>What the contract would do</h3>
       <pre class="mono call">${esc(c.call)}</pre>
       <p class="sub">${esc(c.cannotEvenBeExpressed)}</p>
@@ -268,7 +268,7 @@ function renderContract(card) {
 function renderCounterparty(card) {
   const c = card.counterparty;
   return `
-    <section class="block">
+    <section class="block" data-block="counterparty">
       <h3>The counterparty</h3>
       ${
         c.exists

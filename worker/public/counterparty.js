@@ -45,6 +45,15 @@ function render(data) {
 
   const sigs = (n, need = 2) => `${n} of ${need} signatures`;
 
+  /**
+   * Successions that have not finished.
+   *
+   * Activated ones are history and belong in the lineage; expired ones are dead and
+   * belong nowhere. Both are still fetched, so the page can say plainly that nothing
+   * is pending rather than leaving the reader to infer it from an absence.
+   */
+  const pending = cp.successions.filter((s) => s.state === "Proposed" || s.state === "Attested");
+
   el.innerHTML = `
     <div class="verdict-row">
       <h1 class="verdict ${cp.status === "Broken" ? "hold" : "release"}">${cp.status === "Broken" ? "Broken" : "Payable"}</h1>
@@ -54,7 +63,7 @@ function render(data) {
       </div>
     </div>
 
-    <dl class="facts">
+    <dl class="facts" data-block="facts">
       <div>
         <dt>Pays to, right now</dt>
         <dd class="mono strong">${esc(cp.activeAccount)}</dd>
@@ -73,11 +82,11 @@ function render(data) {
       </div>
     </dl>
 
-    <h2>The succession</h2>
+    <h2 data-block="succession">The succession</h2>
     <p class="prose-p">In order. An account only appears here after it has been paid, or after two
     parties who are not the recipient signed for it. Nothing in this list was edited — each entry is a
     transaction, and each one links to the explorer.</p>
-    <ol class="lineage">
+    <ol class="lineage" data-block="lineage">
       ${cp.lineage
         .map(
           (e) => `
@@ -98,23 +107,31 @@ function render(data) {
     </ol>
 
     ${
-      cp.successions.length
-        ? `<h2>Proposed and not yet activated</h2>
-           <p class="prose-p">These cannot receive anything. They become payable only if both required
-           signatures arrive before the window closes, and the recipient can never supply either one.</p>
+      // Only the ones that have not finished. An activated succession is already in
+      // the lineage above, and listing it here under a heading that says "cannot
+      // receive anything" contradicts the badge next to it — which is exactly what
+      // the first capture of this page showed.
+      pending.length
+        ? `<h2>Proposed, and not yet able to receive anything</h2>
+           <p class="prose-p">A proposal becomes payable only if both required signatures
+           arrive before the window closes. The account that would receive the money can
+           never supply either one.</p>
            <ul class="pending">
-             ${cp.successions
+             ${pending
                .map(
                  (s) => `<li>
                    <span class="mono">${esc(short(s.to))}</span>
-                   <span class="tag ${s.state === "Activated" ? "plain" : ""}">${esc(s.state)}</span>
+                   <span class="tag">${esc(s.state)}</span>
                    <span class="sig ${s.oldKeyAttested ? "yes" : "no"}">${s.oldKeyAttested ? "✓" : "—"} last-paid account</span>
                    <span class="sig ${s.payerAttested ? "yes" : "no"}">${s.payerAttested ? "✓" : "—"} business</span>
                  </li>`,
                )
                .join("")}
            </ul>`
-        : ""
+        : `<h2>Nothing pending</h2>
+           <p class="prose-p">No proposal is in flight. If one were, it would appear here
+           with the two signatures it still needs, and it could not receive anything
+           until both arrived.</p>`
     }
 
     <h2>Check it yourself</h2>

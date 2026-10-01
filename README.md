@@ -30,6 +30,35 @@ ceremony](https://horos.kiter0211.workers.dev/c/0xeb69a61e27f3e8a720fc909cd60db1
 read from Arc. The three sample invoices on the decision card resolve to
 **RELEASE / HOLD / RELEASE** against this record.
 
+## The demo, in two and a half minutes
+
+**[`video/horos-demo.mp4`](video/horos-demo.mp4)** — silent, captioned, no mock-ups.
+Every frame is either the deployed site driven by a real browser or the actual
+output of a script reading Arc. The video is built from those two things rather
+than recorded, because there is no desktop here, and because a pipeline that
+re-renders from the live system cannot drift away from it.
+
+It is committed rather than linked. A link to a build artefact is a link that rots,
+and this one is a submission requirement.
+
+What it covers, in order: the attack in one sentence, the signature that makes the
+refusal structural, the deployed decision card releasing a routine invoice,
+refusing a redirected one and naming all six reasons, the four calibrated
+probabilities and the threshold that acts on them, the public record of a genuine
+two-signature change of account, and the chain's own account of that ceremony read
+back with no key and no API.
+
+Rebuild it with:
+
+```bash
+pnpm capture     # drive the deployed site, save the frames the video uses
+pnpm verify > .video/verify.txt   # the transcript the terminal scenes render
+pnpm video       # render, encode, and refuse to exceed three minutes
+```
+
+`pnpm video` fails rather than warns if the total goes past 180 seconds. The limit
+belongs to the brief, not to us, so it is not a number to raise.
+
 ---
 
 ## The problem

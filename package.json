@@ -32,7 +32,8 @@
     "recover": "tsx scripts/recover.ts",
     "check:pages": "tsx scripts/check-pages.ts",
     "verify": "tsx scripts/verify.ts",
-    "capture": "tsx scripts/capture.ts"
+    "capture": "tsx scripts/capture.ts",
+    "video": "tsx scripts/video.ts"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^4.6.0",
