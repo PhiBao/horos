@@ -12,10 +12,10 @@
  * cannot talk its way past. Not a policy we wrote. An absent key.
  */
 
-import {readFileSync} from "node:fs";
-import {createPublicClient, http, keccak256, toHex} from "viem";
+import {loadEnv} from "../lib/env.js";
+import {keccak256, toHex} from "viem";
 import {getAgentWallet, circleClient, circleBlockchain} from "../lib/circle.js";
-import {getPublicClient, getLocalSigner, currentNetwork, formatUsdc, explorerTx, explorerAddress, USDC_ADDRESS} from "../lib/chain.js";
+import {getPublicClient, getLocalSigner, formatUsdc, explorerTx, explorerAddress, USDC_ADDRESS} from "../lib/chain.js";
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
 import {decide, type Evidence} from "../lib/policy.js";
 import {screenCounterparty, toEvidence} from "../lib/screening.js";
@@ -25,7 +25,6 @@ import {VENDOR_KEY} from "../lib/demo-keys.js";
 loadEnv();
 
 const dep = getDeployment();
-const network = currentNetwork();
 const blockchain = circleBlockchain();
 const client = getPublicClient();
 let circle: ReturnType<typeof circleClient>;
@@ -384,16 +383,6 @@ const short = (a: string) => (a === "0x" + "0".repeat(40) ? "—" : `${a.slice(0
 
 let wallet: Awaited<ReturnType<typeof getAgentWallet>>;
 
-function loadEnv() {
-  for (const f of [".env.local", ".env"]) {
-    try {
-      for (const line of readFileSync(f, "utf8").split("\n")) {
-        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-        if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
-      }
-    } catch {}
-  }
-}
 
 main().catch((e) => {
   console.error(`\n  ${(e as {shortMessage?: string}).shortMessage ?? (e as Error).message}\n`);

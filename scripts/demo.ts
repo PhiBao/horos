@@ -8,11 +8,11 @@
  * one that actually moved the money.
  */
 
-import {readFileSync} from "node:fs";
+import {loadEnv} from "../lib/env.js";
 import {keccak256, toHex} from "viem";
 import {VENDOR_KEY, VENDOR_NEW_KEY, ATTACKER_KEY} from "../lib/demo-keys.js";
 import {privateKeyToAccount} from "viem/accounts";
-import {getPublicClient, getLocalSigner, currentNetwork, formatUsdc, explorerTx, explorerAddress, USDC_ADDRESS} from "../lib/chain.js";
+import {getPublicClient, getLocalSigner, formatUsdc, explorerTx, explorerAddress, USDC_ADDRESS} from "../lib/chain.js";
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
 import {decide, type Evidence} from "../lib/policy.js";
 import {screenCounterparty, toEvidence} from "../lib/screening.js";
@@ -22,7 +22,6 @@ loadEnv();
 
 const dep = getDeployment();
 const client = getPublicClient();
-const network = currentNetwork();
 const pk = process.env.HOROS_DEPLOYER_PRIVATE_KEY as `0x${string}`;
 const account = privateKeyToAccount(pk);
 const wallet = getLocalSigner();
@@ -70,16 +69,6 @@ const ok = (msg: string) => console.log(`    \x1b[32m✓\x1b[0m ${msg}`);
 const note = (msg: string) => console.log(`      ${msg}`);
 const warn = (msg: string) => console.log(`    \x1b[33m!\x1b[0m ${msg}`);
 
-function loadEnv() {
-  for (const f of [".env.local", ".env"]) {
-    try {
-      for (const line of readFileSync(f, "utf8").split("\n")) {
-        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-        if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
-      }
-    } catch {}
-  }
-}
 
 async function refUsed(r: `0x${string}`): Promise<boolean> {
   try {
@@ -488,7 +477,6 @@ async function signDigest(key: `0x${string}`, digest: `0x${string}`): Promise<`0
  * varied enough that "over the budget" is a real test rather than a formality.
  */
 const usdc = (n: number): bigint => BigInt(Math.floor(n * 10 ** 6));
-const minBig = (a: bigint, b: bigint): bigint => (a < b ? a : b);
 /**
  * Names are unique per deployment so a demo run always starts from a clean
  * record. Re-deploying gives a new set of contracts and a fresh story.

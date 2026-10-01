@@ -17,7 +17,7 @@
  * the release path.
  */
 
-import {concern, type Signal} from "./judgment.js";
+import {concern} from "./judgment.js";
 
 export type Verdict = "RELEASE" | "HOLD" | "ESCALATE";
 

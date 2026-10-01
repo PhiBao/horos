@@ -13,7 +13,7 @@
  * step 4 proves the agent can move money without ever holding a key.
  */
 
-import {readFileSync} from "node:fs";
+import {loadEnv} from "../lib/env.js";
 import {getAgentWallet, circleClient, circleBlockchain} from "../lib/circle.js";
 import {currentNetwork, getChain, formatUsdc} from "../lib/chain.js";
 import {walletBalance} from "../lib/circle.js";
@@ -47,7 +47,6 @@ check(
 let wallet: Awaited<ReturnType<typeof getAgentWallet>> | null = null;
 try {
   wallet = await getAgentWallet();
-  const want = circleBlockchain();
   const onArc = (wallet.blockchain ?? "").toUpperCase().includes("ARC");
   check("pinned wallet is live on Arc", onArc, `${wallet.id} · ${wallet.blockchain} · ${wallet.accountType}`);
   check("wallet state is LIVE", (wallet.state ?? "LIVE") === "LIVE", wallet.state ?? "unknown");
@@ -67,7 +66,6 @@ try {
 // scripts/demo-circle.ts so this check stays safe to run at any time.
 try {
   const dep = getDeployment();
-  const c = circleClient();
   const {initiateSmartContractPlatformClient} = await import("@circle-fin/smart-contract-platform");
   const scp = initiateSmartContractPlatformClient({
     apiKey: process.env.CIRCLE_API_KEY!,
@@ -111,13 +109,3 @@ for (const [name, ok, detail] of results) {
 const passed = results.filter(([, ok]) => ok).length;
 console.log(`\n  ${passed}/${results.length} checks passed\n`);
 
-function loadEnv() {
-  for (const f of [".env.local", ".env"]) {
-    try {
-      for (const line of readFileSync(f, "utf8").split("\n")) {
-        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-        if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
-      }
-    } catch {}
-  }
-}
