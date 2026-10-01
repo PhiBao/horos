@@ -20,6 +20,16 @@ pay, never *where*. The destination is resolved from the registry, and the only
 way an address becomes a counterparty's active account is a succession ceremony
 that the recipient cannot complete on its own.
 
+**Try it:** <https://horos.kiter0211.workers.dev> — paste an invoice, get the
+verdict and every reason behind it. No account, no key, and the page cannot move
+money.
+
+**The record it acts on:** [a counterparty that has been through the
+ceremony](https://horos.kiter0211.workers.dev/c/0xeb69a61e27f3e8a720fc909cd60db114fc21565da2f8da958216344076716f62)
+— two accounts, one of them a successor with two signatures behind it, all of it
+read from Arc. The three sample invoices on the decision card resolve to
+**RELEASE / HOLD / RELEASE** against this record.
+
 ---
 
 ## The problem

@@ -28,8 +28,9 @@
     "site:secret": "wrangler secret put JUDGMENT_API_KEY",
     "sync:site": "tsx scripts/sync-worker-config.ts",
     "abi:read": "tsx scripts/gen-read-abi.ts",
-    "check": "pnpm typecheck && pnpm test && pnpm contract:test",
-    "recover": "tsx scripts/recover.ts"
+    "check": "pnpm typecheck && pnpm test && pnpm check:pages && pnpm contract:test",
+    "recover": "tsx scripts/recover.ts",
+    "check:pages": "tsx scripts/check-pages.ts"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^4.6.0",
