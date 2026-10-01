@@ -15,7 +15,7 @@
  *   pnpm tsx scripts/check-pages.ts
  */
 
-import {readFileSync} from "node:fs";
+import {readFileSync, readdirSync} from "node:fs";
 import {resolve} from "node:path";
 
 const read = (p: string) => readFileSync(resolve("worker/public", p), "utf8");
@@ -82,10 +82,25 @@ function main(): void {
   const cssClasses = classesInCss(css);
   const problems: Problem[] = [];
 
-  for (const [page, html, js] of [
-    ["index", read("index.html"), read("app.js")],
-    ["counterparty", read("counterparty.html"), read("counterparty.js")],
-  ] as const) {
+  // Discovered rather than listed, so a page added later cannot quietly escape the
+  // check. Every .html in the assets directory with a script tag next to it of the
+  // same name gets audited; a page with no script has nothing to wire up.
+  const pages = readdirSync(resolve("worker/public"))
+    .filter((f) => f.endsWith(".html"))
+    .map((f) => ({
+      page: f.replace(/\.html$/, ""),
+      html: read(f),
+      js: (() => {
+        try {
+          return read(f.replace(/\.html$/, ".js"));
+        } catch {
+          return "";
+        }
+      })(),
+    }));
+
+  for (const {page, html, js} of pages) {
+    if (!js) continue;
     const ids = idsIn(html);
     const htmlClasses = classesIn(html);
     const {ids: usedIds, classes: usedClasses} = selectorsUsed(js);
@@ -118,7 +133,7 @@ function main(): void {
 
   // Scripts are loaded as modules and must be, since they use import-less ESM and
   // strict mode; a missing type="module" would silently work but change scoping.
-  for (const [page, html] of [["index", read("index.html")], ["counterparty", read("counterparty.html")]] as const) {
+  for (const {page, html} of pages) {
     if (!/<script[^>]+type="module"/.test(html)) {
       problems.push({page, kind: "wiring", what: "no module script tag"});
     }
@@ -128,7 +143,7 @@ function main(): void {
   }
 
   if (problems.length === 0) {
-    console.log("pages OK — every selector resolves, every emitted class is styled");
+    console.log(`pages OK — ${pages.length} checked, every selector resolves, every emitted class is styled`);
     return;
   }
 

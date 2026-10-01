@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pay one invoice with Horos — a pilot</title>
+<meta name="description" content="Let an agent pay one of your invoices. It runs on Arc testnet, it takes ten minutes, and the interesting part is watching it refuse a redirected payment.">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="/">Horos</a>
+    <p class="tagline">A pilot, not a product launch.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="lede">
+    <h1>Let Horos pay one of your invoices</h1>
+    <p>
+      Ten minutes of your time, two of them a phone call. It runs on Arc
+      <strong>testnet</strong>, so the money is test money and nothing you do here can
+      move anything real. What we are testing is whether the refusal is useful to you.
+    </p>
+    <p class="hint">
+      The short version is in
+      <a href="https://github.com/PhiBao/horos/blob/main/ONBOARDING.md">ONBOARDING.md</a>.
+      This page is the same thing, and it is the one to send on.
+    </p>
+  </section>
+
+  <section class="block">
+    <h3>What we are asking</h3>
+    <p>Pay one real invoice &mdash; one you would otherwise pay by bank transfer &mdash; and tell us what
+    the refusal felt like when we engineer one on purpose. No bank credentials, no ledger access, no
+    integration.</p>
+  </section>
+
+  <section class="block">
+    <h3>What you get</h3>
+    <p><strong>A refusal you can point at.</strong> Most businesses have a policy that says "phone to
+    confirm". That works right up until the email arrives with a voice note that sounds like your
+    supplier. Horos has no policy to talk itself out of: it runs against a contract that
+    <em>cannot be told</em> to pay a new address.</p>
+    <p><strong>A public record of who you have paid.</strong> Every counterparty gets a page listing every
+    account they have ever been paid at and the signatures behind each change. Send it to your
+    accountant; so can anyone else.</p>
+  </section>
+
+  <section class="block">
+    <h3>The three steps</h3>
+    <ol class="lineage">
+      <li>
+        <div class="ln-head"><span class="strong">Tell us the vendor</span></div>
+        <div class="ln-body">
+          <p>Their name as it appears on invoices, the address you pay them at, and roughly what a
+          typical invoice is for. That is the whole intake.</p>
+        </div>
+      </li>
+      <li>
+        <div class="ln-head"><span class="strong">We register them, and the agent pays the first invoice</span></div>
+        <div class="ln-body">
+          <p>The first payment establishes the record, and it is the only one that is a real judgement
+          call &mdash; from the second onward there is something to compare against.</p>
+          <p>You get a link to their public page and a decision card showing what the agent read off the
+          invoice and why it decided what it did.</p>
+        </div>
+      </li>
+      <li>
+        <div class="ln-head"><span class="strong">We engineer the attack, and you watch it refuse</span></div>
+        <div class="ln-body">
+          <p>This is the part worth your ten minutes. An invoice arrives from your vendor that looks
+          right, reads right, and asks to be paid somewhere new &mdash; with the old account printed for
+          credibility, urgency, and a request not to confirm.</p>
+          <p><strong>The agent refuses it, and shows you which sentence gave it away.</strong></p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- The two things a visitor can actually do from here. -->
+  <section class="block">
+    <h3>See it before you decide</h3>
+    <p class="sub">Neither of these needs an account.</p>
+    <p>
+      <a href="/?cp=0xeb69a61e27f3e8a720fc909cd60db114fc21565da2f8da958216344076716f62">The decision
+      card</a>, with three sample invoices that resolve to release, refuse, refuse.
+    </p>
+    <p>
+      <a href="/c/0xeb69a61e27f3e8a720fc909cd60db114fc21565da2f8da958216344076716f62">A counterparty
+      record</a>, after a supplier genuinely changed accounts &mdash; two signatures, neither of them the
+      recipient's.
+    </p>
+    <p class="mono small"><a href="https://github.com/PhiBao/horos">Source</a> · MIT</p>
+  </section>
+
+  <section class="block">
+    <h3>What we will ask you afterwards</h3>
+    <p>Whether the refusal was legible. Whether you would have wanted it to escalate to you instead of
+    refusing outright. Whether anything it flagged was actually fine &mdash; a control that cries wolf
+    gets switched off, and then it protects nobody, so that answer matters more to us than the
+    flattering one.</p>
+  </section>
+
+  <p class="meta">Arc testnet · chain 5042002 · no real funds are involved at any point</p>
+</main>
+
+<script type="module">
+  // Nothing to hydrate; this page is static by design. The script tag exists only so
+  // that check-pages.ts can assert the page is wired like its siblings rather than
+  // special-cased.
+</script>
+</body>
+</html>
