@@ -52,6 +52,14 @@ export type Signal = {
   /** The same proposition in three or four words, for a decision card. */
   label: string;
   /**
+   * The concern probability above which this signal alone escalates.
+   *
+   * Per-signal rather than one number, because the questions are not equally
+   * reliable and treating them as though they were is how a well-calibrated signal
+   * gets held to the same standard as a noisy one. See ESCALATES_ABOVE.
+   */
+  threshold: number;
+  /**
    * Which direction of this proposition is the concerning one.
    *
    * Not every question is a risk when the answer is high, and treating them as
@@ -125,6 +133,35 @@ const CONCERNS_WHEN: Record<string, "high" | "low"> = {
   asks_for_secrecy: "high",
 };
 
+/**
+ * Where each signal is allowed to stop a payment on its own.
+ *
+ * Mostly 0.5: the cost of a false positive is one question to a person, and the
+ * cost of a false negative is money sent to whoever wrote the invoice. Those are
+ * not symmetric, so the threshold is not high either.
+ *
+ * `is_ordinary` is the exception, and the number is set from measurement rather
+ * than taste. On the routine invoice in the demo it reads 0.61 to 0.66 depending on
+ * the wording of the document, which leaves it a hair below a 0.5 threshold - and
+ * it did in fact cross, once, holding an invoice that was entirely routine. A
+ * control that occasionally refuses a good payment is one that gets switched off,
+ * and then it protects nothing. At 0.9 it still fires on the attack invoice (0.99)
+ * and no longer fires on the ordinary one.
+ *
+ * Raising it rather than deleting it is deliberate. A document scoring 0.95 on
+ * "does not read like a routine invoice" is genuinely alarming; it is the middle of
+ * the range where this question is noise.
+ */
+const ESCALATES_ABOVE: Record<string, number> = {
+  is_ordinary: 0.9,
+  addressed_to_reader: 0.5,
+  suppresses_verification: 0.5,
+  asks_for_secrecy: 0.5,
+};
+
+/** The default, for any question without an explicit entry. */
+export const DEFAULT_ESCALATE_ABOVE = 0.5;
+
 const QUESTIONS = {
   is_ordinary: {
     type: "noul",
@@ -164,8 +201,8 @@ const QUESTIONS = {
   },
 } as const;
 
-/** Thresholds live in code, never in the prompt. */
-const ESCALATE_ABOVE = 0.5;
+/** The threshold the advisory summary uses, before per-signal overrides. */
+const ESCALATE_ABOVE = DEFAULT_ESCALATE_ABOVE;
 
 /**
  * Where the key comes from.
@@ -253,6 +290,7 @@ export async function judgeDocument(
               question: q.instructions,
               label: LABELS[id] ?? q.instructions,
               concerns_when: CONCERNS_WHEN[id] ?? "high",
+              threshold: ESCALATES_ABOVE[id] ?? DEFAULT_ESCALATE_ABOVE,
             }
           : null;
       })

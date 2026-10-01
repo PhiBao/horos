@@ -68,7 +68,7 @@ describe("the policy decides, the model only proposes", () => {
         accountCount: 2,
         judgment: {
           provider: "typesafe",
-          signals: [{id: "suppresses_verification", probability: 0.98, question: "q", label: "discourages checking", concerns_when: "high"}],
+          signals: [{id: "suppresses_verification", probability: 0.98, question: "q", label: "discourages checking", concerns_when: "high", threshold: 0.5}],
           rationale: "it discourages checking the payment details (98%)",
         },
       }),
@@ -94,7 +94,7 @@ describe("the policy decides, the model only proposes", () => {
               probability: 0.66,
               question: "Is this an ordinary invoice?",
               label: "does not read like a routine invoice",
-              concerns_when: "low",
+              concerns_when: "low", threshold: 0.9,
             },
           ],
           rationale: "the document does not read like a routine invoice (34% likely)",
@@ -116,13 +116,49 @@ describe("the policy decides, the model only proposes", () => {
               probability: 0.01,
               question: "Is this an ordinary invoice?",
               label: "does not read like a routine invoice",
-              concerns_when: "low",
+              concerns_when: "low", threshold: 0.9,
             },
           ],
         },
       }),
     );
     expect(codes(d)).toContain("DOCUMENT_IS_ORDINARY");
+  });
+
+  // The threshold was set from measurement, not taste. On the routine invoice in
+  // the demo, is_ordinary reads around 0.63 as a concern - a hair under the 0.5
+  // threshold once orientation is applied the other way, and it did in fact cross
+  // once and hold an invoice that was entirely routine. A control that occasionally
+  // refuses a good payment is one that gets switched off.
+  it("does not let the noisy signal block at the middle of its range", () => {
+    const at = (p: number) =>
+      decide(
+        ev({
+          judgment: {
+            provider: "typesafe",
+            signals: [
+              {
+                id: "is_ordinary",
+                probability: 1 - p,
+                question: "q",
+                label: "does not read like a routine invoice",
+                concerns_when: "low",
+                threshold: 0.9,
+              },
+            ],
+          },
+        }),
+      );
+
+    // 0.63 is where a genuinely dull invoice lands. It must not stop anything.
+    expect(at(0.63).verdict).toBe("RELEASE");
+    expect(codes(at(0.63))).not.toContain("DOCUMENT_IS_ORDINARY");
+
+    // 0.81 is still noise. This is the band the old threshold was letting through.
+    expect(at(0.81).verdict).toBe("RELEASE");
+
+    // 0.95 is not noise, and still stops the payment.
+    expect(codes(at(0.95))).toContain("DOCUMENT_IS_ORDINARY");
   });
 
   it("reads an ordinary invoice with a high reassuring signal as releasable", () => {
@@ -132,10 +168,10 @@ describe("the policy decides, the model only proposes", () => {
         judgment: {
           provider: "typesafe",
           signals: [
-            {id: "is_ordinary", probability: 0.61, question: "q", label: "not routine", concerns_when: "low"},
-            {id: "addressed_to_reader", probability: 0.11, question: "q", label: "addressed to reader", concerns_when: "high"},
-            {id: "suppresses_verification", probability: 0.03, question: "q", label: "discourages checking", concerns_when: "high"},
-            {id: "asks_for_secrecy", probability: 0.02, question: "q", label: "secrecy", concerns_when: "high"},
+            {id: "is_ordinary", probability: 0.61, question: "q", label: "not routine", concerns_when: "low", threshold: 0.9},
+            {id: "addressed_to_reader", probability: 0.11, question: "q", label: "addressed to reader", concerns_when: "high", threshold: 0.5},
+            {id: "suppresses_verification", probability: 0.03, question: "q", label: "discourages checking", concerns_when: "high", threshold: 0.5},
+            {id: "asks_for_secrecy", probability: 0.02, question: "q", label: "secrecy", concerns_when: "high", threshold: 0.5},
           ],
         },
       }),
@@ -148,7 +184,7 @@ describe("the policy decides, the model only proposes", () => {
       ev({
         judgment: {
           provider: "typesafe",
-          signals: [{id: "suppresses_verification", probability: 0.98, question: "q", label: "discourages checking", concerns_when: "high"}],
+          signals: [{id: "suppresses_verification", probability: 0.98, question: "q", label: "discourages checking", concerns_when: "high", threshold: 0.5}],
           rationale: "it discourages checking the payment details (98%)",
         },
       }),

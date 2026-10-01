@@ -34,8 +34,8 @@
     "ARC_RPC_URLS": "https://rpc.testnet.arc.io,https://rpc.blockdaemon.testnet.arc.io,https://rpc.drpc.testnet.arc.io",
 
     // The live testnet deployment, from deployment.json.
-    "REGISTRY_ADDRESS": "0xbf7c43be9d35cdb37ad0ca5243cd05030f0795e9",
-    "VAULT_ADDRESS": "0x65f7a3a0faf3a0f87c97e5695cf2e5378af0c841"
+    "REGISTRY_ADDRESS": "0xe796227fb179e0b1ebd72515c8791108d8e7c0e5",
+    "VAULT_ADDRESS": "0x6988ade197baed5817f9090f3f42aed1bc9d5048"
   },
 
   // No API key is in this file, and none can be. The judgment key is a Worker secret:

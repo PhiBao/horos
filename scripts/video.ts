@@ -63,9 +63,13 @@ const terminal = (lines: string[], caption: string) => SHELL(
   `<div class="eyebrow">${esc(caption)}</div>
    <div class="term body"><pre>${esc(lines.join("\n"))}</pre></div>`,
   `
+  /* Hug the text and centre the box, rather than stretching to fill the frame and
+     centring the text inside it. The second version puts a short transcript in the
+     middle of a very tall empty rectangle, which reads as a rendering fault. */
   .term {
+    flex: 0 0 auto; align-self: center; width: 100%;
     background: #12151c; border: 1px solid #242a36; border-radius: 12px;
-    padding: 26px 32px; overflow: hidden;
+    padding: 30px 38px; overflow: hidden;
   }
   .term pre {
     font-family: "DejaVu Sans Mono", ui-monospace, monospace;
@@ -122,6 +126,33 @@ function wrap(lines: string[], width: number): string[] {
     out.push((first ? "" : indent) + rest);
   }
   return out;
+}
+
+/**
+ * Split a demo transcript on its numbered steps.
+ *
+ * The demo prints "01." through "08." as it goes, so the steps are already marked
+ * and there is no reason to re-derive them from a regex over prose. Selecting real
+ * sections rather than retyping them means the video cannot show output the script
+ * did not produce.
+ */
+function sections(text: string): {title: string; lines: string[]}[] {
+  const out: {title: string; lines: string[]}[] = [];
+  for (const line of plain(text).split("\n")) {
+    const m = line.match(/^\s*(\d\d)\.\s+(.*)$/);
+    if (m) out.push({title: `${m[1]}. ${m[2]}`, lines: [line]});
+    else if (out.length) out[out.length - 1].lines.push(line);
+    else if (line.trim()) {
+      if (out.length === 0) out.push({title: "", lines: []});
+      out[out.length - 1].lines.push(line);
+    }
+  }
+  return out.filter((s) => s.title || s.lines.some((l) => l.trim()));
+}
+
+/** Drop the polling chatter, which is real but says the same thing nine times. */
+function withoutPolling(lines: string[]): string[] {
+  return lines.filter((l) => !/^\s*Circle:\s*(QUEUED|COMPLETE|CLEARED)\s*$/.test(l));
 }
 
 type Scene = {name: string; caption: string; seconds: number; html: string};
@@ -183,17 +214,11 @@ function buildScenes(): Scene[] {
    * right trade: the top of a panel is what a viewer reads.
    */
   const blocks: [string, string, number, string][] = [
-    ["el-released-reasons", "The deployed site · a routine invoice", 10,
-     "Nothing blocked it. The two things noted are recorded, not obeyed."],
-    ["04-refused", "The deployed site · the redirected invoice", 14,
+    ["04-refused", "The deployed site · the redirected invoice", 12,
      "Same counterparty, same vendor name, one changed account. It refuses."],
-    ["el-refusal-reasons", "The deployed site · every reason, named", 17,
+    ["el-refusal-reasons", "The deployed site · every reason, named", 15,
      "Six blocking reasons, each naming its own signal. The first is the text in the document addressed to whoever is reading it — a supplier invoice has no reason to say that."],
-    ["el-refusal-judgment", "The deployed site · four probabilities", 14,
-     "The model returns calibrated numbers, not a verdict. The threshold that acts on them is a line of code you can read."],
-    ["el-refusal-contract", "The deployed site · what the contract would do", 13,
-     "The call that would be made, printed in full — with the argument that is missing from it."],
-    ["el-record-lineage", "The deployed site · the public record", 15,
+    ["el-record-lineage", "The deployed site · the public record", 14,
      "A supplier genuinely changed accounts. Two signatures: the account that was last paid, and the business. Never the recipient."],
   ];
   for (const [file, caption, secs, sub] of blocks) {
@@ -216,11 +241,50 @@ function buildScenes(): Scene[] {
       `));
   }
 
-  // ---- 8-9. the chain, read with no key -----------------------------------
+  // ---- the live run, keyless, in the transcript the script printed ---------
+  //
+  // These are the strongest frames in the video and the only ones that show money
+  // moving. Same rule as everything else: the text is the script's own stdout,
+  // sectioned, not retyped - so the video cannot show a run that did not happen.
+  const demoPath = resolve(OUT, "demo.txt");
+  if (existsSync(demoPath)) {
+    const parts = sections(readFileSync(demoPath, "utf8"));
+    const pick = (...n: number[]) => parts.filter((p) => n.some((i) => p.title.startsWith(String(i).padStart(2, "0") + ".")));
+    const show = (sel: {title: string; lines: string[]}[], perPage: number) =>
+      paginate(
+        wrap(withoutPolling(sel.flatMap((p) => p.lines)).filter((l) => l.trim() !== ""), 118),
+        perPage,
+      );
+
+    const runs: [string, string, number, {title: string; lines: string[]}[]][] = [
+      ["demo-keyless", "The live run · no key in this process", 14, pick(1, 4)],
+      ["demo-refusal", "The live run · the policy refuses", 18, pick(5)],
+      ["demo-ceremony", "The live run · the ceremony, signed by Circle", 16, pick(6)],
+      ["demo-paid", "The live run · and now it pays", 14, pick(7, 8)],
+    ];
+
+    for (const [name, caption, secs, sel] of runs) {
+      const pages = show(sel, 24);
+      if (pages.length === 0) {
+        console.warn(`  no transcript for ${name} — run the demo and save .video/demo.txt`);
+        continue;
+      }
+      pages.forEach((page, i) => {
+        add(
+          `${name}${pages.length > 1 ? `-${i + 1}` : ""}`,
+          `${caption}${pages.length > 1 ? ` (${i + 1}/${pages.length})` : ""}`,
+          pages.length > 1 ? Math.round(secs / pages.length) : secs,
+          terminal(page, caption),
+        );
+      });
+    }
+  }
+
+  // ---- the chain, read with no key -----------------------------------
   const transcriptPath = resolve(OUT, "verify.txt");
   if (existsSync(transcriptPath)) {
     const lines = wrap(plain(readFileSync(transcriptPath, "utf8")).split("\n"), 96);
-    const pages = paginate(lines, 32);
+    const pages = paginate(lines, 26);
     pages.forEach((page, i) => {
       add(
         `verify-${i + 1}`,
@@ -232,7 +296,7 @@ function buildScenes(): Scene[] {
   }
 
   // ---- 10. closing ---------------------------------------------------------
-  add("99-end", "", 10, SHELL("", `
+  add("99-end", "", 9, SHELL("", `
     <div class="body">
       <h1 class="small">The refusal is the product.</h1>
       <p class="sub">Horos is live on Arc testnet, and the record above was made by a

@@ -61,7 +61,14 @@ export type Evidence = {
    */
   judgment?: {
     provider: "typesafe" | "none";
-    signals: {id: string; probability: number; question: string; label: string; concerns_when: "high" | "low"}[];
+    signals: {
+      id: string;
+      probability: number;
+      question: string;
+      label: string;
+      concerns_when: "high" | "low";
+      threshold: number;
+    }[];
     rationale?: string;
   };
 
@@ -196,7 +203,11 @@ export function decide(ev: Evidence): Decision {
       // risk-if-high is backwards for that one, and the mistake is invisible until
       // the value happens to cross the threshold.
       const concerning = concern(signal);
-      if (concerning < JUDGMENT_ESCALATE_ABOVE) continue;
+      // Per-signal, because the questions are not equally reliable. See
+      // ESCALATES_ABOVE in lib/judgment.ts for why is_ordinary is the outlier and
+      // why the number is where it is.
+      const threshold = signal.threshold ?? JUDGMENT_ESCALATE_ABOVE;
+      if (concerning < threshold) continue;
       reasons.push({
         code: `DOCUMENT_${signal.id.toUpperCase()}`,
         detail:

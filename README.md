@@ -25,7 +25,7 @@ verdict and every reason behind it. No account, no key, and the page cannot move
 money.
 
 **The record it acts on:** [a counterparty that has been through the
-ceremony](https://horos.kiter0211.workers.dev/c/0xeb69a61e27f3e8a720fc909cd60db114fc21565da2f8da958216344076716f62)
+ceremony](https://horos.kiter0211.workers.dev/c/0x1675d09c58082473285fe564f48d6b95d8ab65fcf405638390ea268a22165c29)
 — two accounts, one of them a successor with two signatures behind it, all of it
 read from Arc. The three sample invoices on the decision card resolve to
 **RELEASE / HOLD / RELEASE** against this record.
@@ -137,10 +137,19 @@ these are the actual fixture texts, not illustrations):
 | asks to be kept quiet | **0.99** | 0.02 | 0.03 |
 
 That separation came from prose in a document rather than from a list lookup — no
-address in it has ever been seen before. The last column is the honest awkward one:
-"is an ordinary invoice" reads 0.14 on a genuinely dull invoice, so that one signal
-is poorly calibrated and we do not threshold on it. The other three separate
-cleanly and consistently, and those are the ones the policy acts on.
+address in it has ever been seen before, and nothing in it appears on a list.
+
+The last row is the honest awkward one. "Is an ordinary invoice" is the noisiest of
+the four: it reads 0.61 on a genuinely dull invoice, which is close enough to the
+threshold that it crossed once and held a payment that was entirely routine. A
+control that occasionally refuses a good payment is one that gets switched off, and
+then it protects nobody.
+
+So each question carries its own threshold rather than sharing one, and that one is
+set at 0.9 instead of 0.5. It still fires on the attack (0.99) and no longer fires on
+the ordinary invoice. Raising it rather than deleting it is deliberate — a document
+scoring 0.95 on "does not read like an invoice" is genuinely alarming; the middle of
+the range is where the question is noise.
 
 The thresholds live in our code, never in a prompt, and the advisory verdict a
 model can return is only ever `ESCALATE`. An unremarkable invoice produces no
