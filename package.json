@@ -30,7 +30,9 @@
     "abi:read": "tsx scripts/gen-read-abi.ts",
     "check": "pnpm typecheck && pnpm test && pnpm check:pages && pnpm contract:test",
     "recover": "tsx scripts/recover.ts",
-    "check:pages": "tsx scripts/check-pages.ts"
+    "check:pages": "tsx scripts/check-pages.ts",
+    "verify": "tsx scripts/verify.ts",
+    "capture": "tsx scripts/capture.ts"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^4.6.0",
