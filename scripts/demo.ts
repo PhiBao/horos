@@ -213,11 +213,15 @@ async function main() {
   })) as `0x${string}`;
 
   if (cpId === "0x0000000000000000000000000000000000000000000000000000000000000000") {
+    // The business is named here, at registration, and nowhere else can name it.
+    // From this call on, the payer half of every succession has exactly one right
+    // answer: this key. A stranger can still register themselves as a payer, but
+    // registration has never granted the payer half.
     const regHash = await regClient.writeContract({
       address: dep.registry,
       abi: registryAbi,
       functionName: "register",
-      args: [COUNTERPARTY_NAME, VENDOR],
+      args: [COUNTERPARTY_NAME, VENDOR, account.address],
     });
     await client.waitForTransactionReceipt({hash: regHash});
     cpId = (await client.readContract({

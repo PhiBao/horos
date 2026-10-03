@@ -1,8 +1,8 @@
 {
-  "registry": "0xe796227fb179e0b1ebd72515c8791108d8e7c0e5",
-  "vault": "0x6988ade197baed5817f9090f3f42aed1bc9d5048",
+  "registry": "0xc0804d616c8f3d5b42af6e19552eaca4feebe3fd",
+  "vault": "0x0a61a1fec3a6059d2b30cba83fbec85e78576de9",
   "chainId": 5042002,
   "network": "arc-testnet",
-  "deployedAt": "2026-10-01T09:23:13.908Z",
+  "deployedAt": "2026-10-03T08:00:56.391Z",
   "deployer": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67"
 }

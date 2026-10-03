@@ -22,8 +22,12 @@ import {CounterpartyRegistry} from "./CounterpartyRegistry.sol";
  *      results in this vault sending USDC to an account that has not been proven
  *      to be the same counterparty the payer already had.
  *
- *      The owner may move the whole balance out, and may stop payments. The owner
- *      cannot make a payment happen, and cannot make it go somewhere new.
+ *      The owner may move the whole balance out -- withdraw() takes an arbitrary
+ *      address -- and may stop payments. The owner cannot make a *payment* happen
+ *      through pay(), and cannot make one go somewhere new. That distinction is the
+ *      whole reason the owner must be a key the business holds and never the agent
+ *      wallet: a compromised agent holding signing credentials could otherwise drain
+ *      the vault in one call.
  */
 contract CustodyVault {
     CounterpartyRegistry public immutable registry;
@@ -138,13 +142,14 @@ contract CustodyVault {
     }
 
     /**
-     * @notice Hand ownership to the agent's own wallet, permanently.
-     * @dev One-way by design. Ownership here means: the ability to set budgets and
-     *      to stop the vault. It never means the ability to redirect a payment,
-     *      because `pay()` resolves its destination from the registry and takes
-     *      no address. Handing over the owner therefore cannot hand over the
-     *      ability to spend: it hands over the ability to set limits and to pull
-     *      the plug, which is what an operator should hold.
+     * @notice Hand ownership to a new key.
+     * @dev Reversible only by the new owner -- there is no back door, so mean it.
+     *      Ownership here means: the ability to set budgets, to stop the vault, and
+     *      to withdraw the whole balance to any address. It never means the ability
+     *      to redirect a *payment*, because `pay()` resolves its destination from
+     *      the registry and takes no address. But do not confuse the two: handing
+     *      the owner role to an agent hands it the ability to spend everything via
+     *      withdraw(). The owner must be a business-held key. Always.
      */
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();

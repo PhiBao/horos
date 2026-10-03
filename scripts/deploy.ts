@@ -81,22 +81,20 @@ async function deploy() {
   const vault = vaultReceipt.contractAddress!;
   console.log(`  CustodyVault          ${vault}`);
 
-  // Hand the vault to the agent's own wallet, so the entity that spends is the
-  // entity that sets the limits. Off unless HOROS_VAULT_OWNER is set, because the
-  // two demos use different signers: pnpm demo signs locally, pnpm demo:circle
-  // signs through Circle, and only one of them can be the owner at a time.
-  const agentWallet = process.env.HOROS_VAULT_OWNER as `0x${string}` | undefined;
-  if (agentWallet && agentWallet.toLowerCase() !== account.address.toLowerCase()) {
-    const xfer = await wallet.writeContract({
-      chain,
-      abi: vaultAbi,
-      address: vault,
-      functionName: "transferOwnership",
-      args: [agentWallet],
-    });
-    await publicClient.waitForTransactionReceipt({hash: xfer});
-    console.log(`  vault owner    ${agentWallet}  (the agent)`);
-  }
+  // The owner stays with the deploying key — a key the business holds. Never the
+  // agent wallet, and this is not caution, it is the load-bearing half of the story:
+  // the owner can call withdraw() to an arbitrary address, so whoever holds the
+  // owner role can drain the vault. An earlier deployment handed it to the agent,
+  // which meant a compromised agent process (holding the Circle credentials, which
+  // are signing power) could take everything while "it can only ask" sat in the
+  // README. If the deployer is not the business, hand it over explicitly:
+  // vault.transferOwnership(business) — and mean it, because it is reversible only
+  // by the new owner.
+  //
+  // (HOROS_VAULT_OWNER used to automate that handover. It no longer exists: a vault
+  // whose owner is a config value away from the agent wallet is a vault whose owner
+  // is the agent wallet.)
+  console.log(`  vault owner    ${account.address}  (the deploying key — hold it like money)`);
 
   // The vault is the only address allowed to attribute payments, so the
   // registry's record of who paid what cannot be forged by anyone else.

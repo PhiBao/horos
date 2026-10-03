@@ -200,6 +200,28 @@ describe("the policy decides, the model only proposes", () => {
     expect(a.verdict).toBe(b.verdict);
   });
 
+  it("notes a novel destination without blocking on it", () => {
+    // The account after a genuine ceremony is fresh too. If novelty blocked, the
+    // after-move payment could never release — so this is a note, and the release
+    // stands alongside it.
+    const d = decide(ev({screening: {checked: true, flagged: false, novelAddress: true}}));
+    expect(d.verdict).toBe("RELEASE");
+    expect(codes(d)).toContain("SCREENING_NOVEL_ADDRESS");
+    expect(codes(d)).not.toContain("SCREENING_UNAVAILABLE");
+  });
+
+  it("notes a contract destination without blocking on it", () => {
+    const d = decide(ev({screening: {checked: true, flagged: false, contractAddress: true}}));
+    expect(d.verdict).toBe("RELEASE");
+    expect(codes(d)).toContain("SCREENING_CONTRACT_ADDRESS");
+  });
+
+  it("does not invent novelty when freshness is unknown", () => {
+    const d = decide(ev({screening: {checked: true, flagged: false}}));
+    expect(codes(d)).not.toContain("SCREENING_NOVEL_ADDRESS");
+    expect(codes(d)).not.toContain("SCREENING_CONTRACT_ADDRESS");
+  });
+
   it("releases the ordinary case: the address on the invoice is the address on record", () => {
     const d = decide(ev());
     expect(d.verdict).toBe("RELEASE");

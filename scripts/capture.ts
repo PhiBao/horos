@@ -20,7 +20,7 @@ const SITE = process.env.HOROS_SITE ?? "https://horos.kiter0211.workers.dev";
 const OUT = resolve(".capture");
 
 /** The counterparty the demo seeded, with the ceremony behind it. */
-const CP = "0x1675d09c58082473285fe564f48d6b95d8ab65fcf405638390ea268a22165c29";
+const CP = "0xf85f374f0e39541527bc02e3a90ff684a86c9a099d8db994e09d94be651da9b6";
 
 async function main(): Promise<void> {
   if (!/^https:\/\//.test(SITE)) {

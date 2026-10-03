@@ -122,6 +122,39 @@ describe("an account cannot be reassigned without the ceremony", () => {
     expect(src).toMatch(/bool\s+payerAttested/);
   });
 
+  it("names the business at registration, because the payer half needs one right answer", () => {
+    // Without a designated party, any stranger could register as a payer and sign
+    // the payer half themselves — and a single compromised vendor key would be
+    // enough to redirect everything. The business is named up front precisely so
+    // the check below has one right answer.
+    expect(src).toMatch(/address\s+business;/);
+    const register = src.slice(src.indexOf("function register("));
+    expect(register.slice(0, 2500)).toMatch(/address\s+business\)/);
+    expect(register.slice(0, 2500)).toMatch(/c\.business\s*=\s*business/);
+  });
+
+  it("satisfies the payer half with the business key and no other", () => {
+    const attest = src.slice(src.indexOf("function attest("));
+    expect(attest.slice(0, 3000)).toMatch(/signer\s*!=\s*c\.business/);
+    expect(attest.slice(0, 3000)).toMatch(/revert\s+NotBusiness/);
+  });
+
+  it("lets only the business hand the payer side on", () => {
+    expect(src).toMatch(/function\s+transferBusiness\(/);
+    const t = src.slice(src.indexOf("function transferBusiness("));
+    expect(t.slice(0, 800)).toMatch(/msg\.sender\s*!=\s*c\.business/);
+  });
+
+  it("keeps bricking and quorum-setting to business-or-account", () => {
+    // Both used to admit any registered payer, and registration is permissionless —
+    // so strangers could permanently brick a counterparty or set an unmeetable
+    // quorum. The guards now name the two parties with standing.
+    for (const fn of ["function discloseInheritance(", "function setQuorumRequired("]) {
+      const body = src.slice(src.indexOf(fn));
+      expect(body.slice(0, 1200)).toMatch(/msg\.sender\s*!=\s*c\.activeAccount\s*&&\s*msg\.sender\s*!=\s*c\.business/);
+    }
+  });
+
   it("reaches Activated only from Attested, so activate() cannot be called early", () => {
     // activate() does not re-check the signatures; it requires the state that only
     // attest() can produce. Following that chain is the point - the guard is one

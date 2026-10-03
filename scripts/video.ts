@@ -186,7 +186,7 @@ function buildScenes(): Scene[] {
     </div>`));
 
   // ---- 3. the claim --------------------------------------------------------
-  add("03-claim", "", 11, SHELL("", `
+  add("03-claim", "", 10, SHELL("", `
     <div class="body">
       <h1 class="small">It refuses by not being able to comply.</h1>
       <div class="code">CustodyVault.pay(bytes32 counterpartyId, uint256 amount, bytes32 ref)</div>
@@ -218,7 +218,7 @@ function buildScenes(): Scene[] {
      "Same counterparty, same vendor name, one changed account. It refuses."],
     ["el-refusal-reasons", "The deployed site · every reason, named", 15,
      "Six blocking reasons, each naming its own signal. The first is the text in the document addressed to whoever is reading it — a supplier invoice has no reason to say that."],
-    ["el-record-lineage", "The deployed site · the public record", 14,
+    ["el-record-lineage", "The deployed site · the public record", 13,
      "A supplier genuinely changed accounts. Two signatures: the account that was last paid, and the business. Never the recipient."],
   ];
   for (const [file, caption, secs, sub] of blocks) {
@@ -256,8 +256,13 @@ function buildScenes(): Scene[] {
         perPage,
       );
 
+    // Section boundaries are story boundaries: never merge across non-adjacent
+    // sections. An earlier cut concatenated 01 with 04 and silently dropped 02
+    // and 03 — the funding and the registration, the one step the whole ceremony
+    // depends on — from the video.
     const runs: [string, string, number, {title: string; lines: string[]}[]][] = [
-      ["demo-keyless", "The live run · no key in this process", 14, pick(1, 4)],
+      ["demo-keyless", "The live run · no key in this process", 8, pick(1)],
+      ["demo-register", "The live run · the business is named, once", 12, pick(2, 3)],
       ["demo-refusal", "The live run · the policy refuses", 18, pick(5)],
       ["demo-ceremony", "The live run · the ceremony, signed by Circle", 16, pick(6)],
       ["demo-paid", "The live run · and now it pays", 14, pick(7, 8)],
@@ -296,7 +301,7 @@ function buildScenes(): Scene[] {
   }
 
   // ---- 10. closing ---------------------------------------------------------
-  add("99-end", "", 9, SHELL("", `
+  add("99-end", "", 8, SHELL("", `
     <div class="body">
       <h1 class="small">The refusal is the product.</h1>
       <p class="sub">Horos is live on Arc testnet, and the record above was made by a

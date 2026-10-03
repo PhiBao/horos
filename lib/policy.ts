@@ -84,6 +84,10 @@ export type Evidence = {
 
   screening: {
     checked: boolean;
+    /** The destination has never sent a transaction. Note-level context, never a verdict. */
+    novelAddress?: boolean;
+    /** The destination holds contract code. Note-level context, never a verdict. */
+    contractAddress?: boolean;
     flagged: boolean;
     source?: string;
     detail?: string;
@@ -264,6 +268,31 @@ export function decide(ev: Evidence): Decision {
     reasons.push({
       code: "SCREENING_CLEAN",
       detail: `Screened against ${ev.screening.source}; nothing found. This is one input, not the whole answer.`,
+      blocking: false,
+    });
+  }
+
+  // What the chain itself says about the destination. Notes, never verdicts: the
+  // account after a genuine ceremony is fresh too, and it must still release. But
+  // a redirected payment goes somewhere new by definition, so "never seen onchain
+  // before" is context a person should have when they review the refusal.
+  if (ev.screening.novelAddress) {
+    reasons.push({
+      code: "SCREENING_NOVEL_ADDRESS",
+      detail:
+        "This address has never sent a transaction onchain before. That is normal for " +
+        "a brand-new account — and it is also exactly what a redirected payment looks " +
+        "like. Recorded as context, not treated as a verdict.",
+      blocking: false,
+    });
+  }
+  if (ev.screening.contractAddress) {
+    reasons.push({
+      code: "SCREENING_CONTRACT_ADDRESS",
+      detail:
+        "The destination holds contract code: it is a program, not a person. Paying a " +
+        "contract is sometimes correct (a multisig, a vault) and sometimes the whole " +
+        "attack. Worth one look.",
       blocking: false,
     });
   }

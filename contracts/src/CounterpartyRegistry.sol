@@ -83,6 +83,17 @@ contract CounterpartyRegistry {
         CounterpartyStatus status;
         address activeAccount;
         address registrant;
+        /**
+         * The one address whose signature satisfies the payer half of a succession.
+         *
+         * Set once at registration, transferable only by itself. This is the entire
+         * difference between "someone countersigned" and "the business agreed": without
+         * a designated party, any stranger could register as a payer and sign the payer
+         * half themselves, and a single compromised vendor key would be enough to
+         * redirect everything. With it, moving an account needs two keys that no one
+         * party holds.
+         */
+        address business;
         uint64 registeredAt;
         uint16 version; // number of accounts in the lineage
         uint16 quorumRequired;
@@ -123,7 +134,9 @@ contract CounterpartyRegistry {
     mapping(bytes32 => Counterparty) private _counterparties;
     mapping(bytes32 => bytes32[]) private _byName;
 
-    /// @dev Registered payers. Registration alone can only ever VETO a succession.
+    /// @dev Registered payers. Registration grants the right to propose a succession
+    ///      and to attest as quorum — nothing else. It has never granted the payer half
+    ///      of a succession, which belongs to the designated business alone.
     mapping(bytes32 => mapping(address => bool)) public isPayer;
     /// @dev Successful payments attributed to a payer. An attestation carries its own history.
     mapping(bytes32 => mapping(address => uint256)) public payerPaymentCount;
@@ -146,6 +159,7 @@ contract CounterpartyRegistry {
         bytes32 indexed id, string canonicalName, address indexed firstAccount, address indexed registrant
     );
     event PayerRegistered(bytes32 indexed id, address indexed payer);
+    event BusinessTransferred(bytes32 indexed id, address indexed from, address indexed to);
     event SuccessionProposed(
         bytes32 indexed successionId,
         bytes32 indexed counterpartyId,
@@ -186,6 +200,7 @@ contract CounterpartyRegistry {
     error NotProposed();
     error ProposalExpired(uint64 expiresAt);
     error BadSigner(address expected, address got);
+    error NotBusiness(address expected, address got);
     error SignerIsSuccessor();
     error SignatureReplay();
     error NotAttested();
@@ -202,7 +217,7 @@ contract CounterpartyRegistry {
     constructor(address initialOwner) {
         if (initialOwner == address(0)) revert ZeroAddress();
         registryOwner = initialOwner;
-        _cp = Counterparty(bytes32(0), "", CounterpartyStatus.None, address(0), address(0), 0, 0, 0, 0, address(0), new bytes32[](0), new LineageEntry[](0));
+        _cp = Counterparty(bytes32(0), "", CounterpartyStatus.None, address(0), address(0), address(0), 0, 0, 0, 0, address(0), new bytes32[](0), new LineageEntry[](0));
     }
 
     modifier onlyRegistryOwner() {
@@ -263,17 +278,24 @@ contract CounterpartyRegistry {
     // ---------------------------------------------------------------------
 
     /**
-     * @notice Register a counterparty and open its lineage at `firstAccount`.
+     * @notice Register a counterparty, open its lineage at `firstAccount`, and name the
+     *         one party whose signature satisfies the payer half of every future succession.
      * @dev The counterparty id is derived deterministically from the canonical name and the
      *      first account that received money. Anyone who can show they paid `firstAccount`
      *      computes the same id. There is no random salt, so there is nothing to squat on
      *      except by being the first to actually pay.
+     *
+     *      `business` must be a key the actual business holds — never the agent wallet,
+     *      never a hot demo key left in a shell. Anyone may register, and the registrant
+     *      names the business, because for a brand-new counterparty there is nobody else
+     *      to ask; from then on, only the business speaks for the payer side.
      */
-    function register(string calldata canonicalName, address firstAccount)
+    function register(string calldata canonicalName, address firstAccount, address business)
         external
         returns (bytes32 id)
     {
         if (firstAccount == address(0)) revert ZeroAddress();
+        if (business == address(0)) revert ZeroAddress();
 
         string memory canon = _canonicalise(canonicalName);
         if (bytes(canon).length == 0) revert EmptyName();
@@ -292,6 +314,7 @@ contract CounterpartyRegistry {
         c.status = CounterpartyStatus.Clean;
         c.activeAccount = firstAccount;
         c.registrant = msg.sender;
+        c.business = business;
         c.registeredAt = uint64(block.timestamp);
         c.version = 1;
         c.entries.push(
@@ -319,11 +342,28 @@ contract CounterpartyRegistry {
         emit PayerRegistered(id, msg.sender);
     }
 
+    /**
+     * @notice Hand the payer side of a counterparty to a new key.
+     * @dev Only the current business. Lost the key? That is what
+     *      discloseInheritance() is for — a public, permanent break, not a quiet one.
+     */
+    function transferBusiness(bytes32 id, address newBusiness) external {
+        Counterparty storage c = _counterparties[id];
+        if (c.status == CounterpartyStatus.None) revert UnknownCounterparty(id);
+        if (msg.sender != c.business) revert NotBusiness(c.business, msg.sender);
+        if (newBusiness == address(0)) revert ZeroAddress();
+        emit BusinessTransferred(id, c.business, newBusiness);
+        c.business = newBusiness;
+    }
+
     function setQuorumRequired(bytes32 id, uint16 quorum) external {
         Counterparty storage c = _counterparties[id];
         if (c.status == CounterpartyStatus.None) revert UnknownCounterparty(id);
-        // Only the party receiving the money, or a registered payer, may demand more scrutiny.
-        if (msg.sender != c.activeAccount && !isPayer[id][msg.sender]) revert NotProposer();
+        // Only the party receiving the money, or the business paying it, may demand
+        // more scrutiny. Any registered payer used to qualify, and registration is
+        // permissionless — so any stranger could set an unmeetable quorum and strand
+        // the counterparty. That door is now shut.
+        if (msg.sender != c.activeAccount && msg.sender != c.business) revert NotProposer();
         c.quorumRequired = quorum;
         emit QuorumRequiredSet(id, quorum);
     }
@@ -375,7 +415,8 @@ contract CounterpartyRegistry {
     /**
      * @notice Attach a signature to a succession proposal.
      * @param role OldKey signs with the account that received the last payment.
-     *             Payer/Quorum sign with a registered payer's key.
+     *             Payer signs with the designated business key — the one named at
+     *             registration, nobody else. Quorum signs with a registered payer's key.
      * @dev The proposed new account (`to`) is never a valid signer. It cannot pay itself in.
      */
     function attest(bytes32 successionId, AttestRole role, bytes calldata signature) external {
@@ -405,14 +446,20 @@ contract CounterpartyRegistry {
         if (role == AttestRole.OldKey) {
             if (signer != s.from) revert BadSigner(s.from, signer);
             if (s.oldKeyAttested) revert AlreadyAttested();
+        } else if (role == AttestRole.Payer) {
+            // The payer half is the business and nobody else. Checking isPayer here
+            // is what the previous version did, and registration is permissionless —
+            // so any stranger could countersign their own redirect. The business was
+            // named at registration precisely so this check has one right answer.
+            Counterparty storage c = _counterparties[s.counterpartyId];
+            if (signer != c.business) revert NotBusiness(c.business, signer);
+            if (signer == s.from) revert BadSigner(s.from, signer);
+            if (s.payerAttested) revert AlreadyAttested();
         } else {
             if (!isPayer[s.counterpartyId][signer]) revert NotRegisteredPayer();
             if (signer == s.from) revert BadSigner(s.from, signer);
-            if (role == AttestRole.Payer && s.payerAttested) revert AlreadyAttested();
-            if (role == AttestRole.Quorum) {
-                for (uint256 i = 0; i < s.quorumAttestors.length; ++i) {
-                    if (s.quorumAttestors[i] == signer) revert AlreadyAttested();
-                }
+            for (uint256 i = 0; i < s.quorumAttestors.length; ++i) {
+                if (s.quorumAttestors[i] == signer) revert AlreadyAttested();
             }
         }
 
@@ -496,7 +543,11 @@ contract CounterpartyRegistry {
         Counterparty storage c = _counterparties[id];
         if (c.status == CounterpartyStatus.None) revert UnknownCounterparty(id);
         if (c.status != CounterpartyStatus.Clean) revert NotClean(id);
-        if (msg.sender != c.activeAccount && !isPayer[id][msg.sender]) revert NotProposer();
+        // Business or the account — never just any payer. A permissionless
+        // registerPayer plus this guard used to let any stranger mark any
+        // counterparty Broken, permanently. Bricking the record must not be
+        // cheaper than using it.
+        if (msg.sender != c.activeAccount && msg.sender != c.business) revert NotProposer();
 
         c.status = CounterpartyStatus.Broken;
         c.brokenDisclosedAt = uint64(block.timestamp);

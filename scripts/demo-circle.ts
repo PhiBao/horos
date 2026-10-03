@@ -31,8 +31,16 @@ let circle: ReturnType<typeof circleClient>;
 
 const VENDOR = "0x15AB8109378736FA1C1C401175d375DB9b1dAC4B";
 const VENDOR_NEW = "0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555";
+/**
+ * The business: the one key whose signature satisfies the payer half of a succession.
+ *
+ * Named at registration, transferable only by itself. Deliberately NOT the agent
+ * wallet — the agent executes payments and submits other parties' signatures, but
+ * it authorises nothing, and nothing it submits can stand in for this key.
+ */
+const BUSINESS = process.env.HOROS_DEPLOYER as `0x${string}`;
 /** The payer is whoever owns the vault, which is the agent wallet. */
-const PAYER = (process.env.CIRCLE_WALLET_ADDRESS as `0x${string}`) ?? (process.env.HOROS_DEPLOYER as `0x${string}`);
+const PAYER = (process.env.CIRCLE_WALLET_ADDRESS as `0x${string}`) ?? BUSINESS;
 
 const usdc = (n: number): bigint => BigInt(Math.floor(n * 10 ** 6));
 /**
@@ -169,7 +177,10 @@ async function main() {
   })) as `0x${string}`;
 
   if (cpId === "0x" + "0".repeat(64)) {
-    await execute(dep.registry, registryAbi, "register(string,address)", [COUNTERPARTY_NAME, VENDOR], `register "${COUNTERPARTY_NAME}"`);
+    // The agent submits the registration, but it names the business — it cannot
+    // name itself, and naming is the only power registration confers. From here on
+    // the payer half of every succession belongs to BUSINESS and nobody else.
+    await execute(dep.registry, registryAbi, "register(string,address,address)", [COUNTERPARTY_NAME, VENDOR, BUSINESS], `register "${COUNTERPARTY_NAME}", business ${BUSINESS.slice(0, 10)}…`);
     cpId = (await client.readContract({
       address: dep.registry, abi: registryAbi, functionName: "nameIndex", args: [nameHash],
     })) as `0x${string}`;
@@ -178,7 +189,19 @@ async function main() {
   }
   ok(`counterparty  ${cpId.slice(0, 18)}…`);
 
-  await execute(dep.vault, vaultAbi, "setCounterpartyCap(bytes32,uint256)", [cpId, usdc(10).toString()], "set a 10 USDC budget");
+  // Owner-only, so it goes through the business key — never through Circle. The
+  // agent wallet holds no owner powers at all now: had it kept them, a compromised
+  // agent could drain the vault with withdraw(), and "it can only ask" would be a lie.
+  {
+    const h = await getLocalSigner().writeContract({
+      address: dep.vault,
+      abi: vaultAbi,
+      functionName: "setCounterpartyCap",
+      args: [cpId, usdc(10)],
+    });
+    await client.waitForTransactionReceipt({hash: h});
+    ok(`set a 10 USDC budget  ${explorerTx(h)}`);
+  }
 
   // ---- 3. pay the ordinary invoice ------------------------------------
   t("Pay the first invoice. The address is the one on record.");
@@ -312,22 +335,18 @@ async function proposeAndComplete(
   })) as `0x${string}`[];
   const sid = ids[ids.length - 1];
 
-  // The business must be a registered payer before it can authorise anything.
-  // Note this is deliberately NOT the agent wallet: the agent executes, the
-  // business authorises.
-  const businessPayer = process.env.HOROS_DEPLOYER as `0x${string}`;
-  const isPayer = (await client.readContract({
-    address: dep.registry, abi: registryAbi, functionName: "isPayer", args: [cpId, businessPayer],
-  })) as boolean;
-  if (!isPayer) {
-    const h = await getLocalSigner().writeContract({
-      address: dep.registry,
-      abi: registryAbi,
-      functionName: "registerPayer",
-      args: [cpId],
-    });
-    await client.waitForTransactionReceipt({hash: h});
-    ok(`the business is a registered payer  ${explorerTx(h)}`);
+  // The business needs no registration: it was named at registration, and the
+  // payer half of this succession belongs to it and nobody else. Read it back and
+  // say so plainly, because a ceremony whose authoriser is ambiguous is theatre.
+  {
+    const cp = (await client.readContract({
+      address: dep.registry, abi: registryAbi, functionName: "get", args: [cpId],
+    })) as {business: `0x${string}`};
+    if (cp.business.toLowerCase() !== BUSINESS.toLowerCase()) {
+      console.error(`\n  the counterparty's business is ${cp.business}, not ${BUSINESS} — aborting\n`);
+      process.exit(1);
+    }
+    ok(`the business is ${BUSINESS.slice(0, 10)}… — designated at registration, transferable only by itself`);
   }
 
   // Attestations are EIP-712 signatures, so they are produced offchain by the

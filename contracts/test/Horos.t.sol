@@ -66,7 +66,7 @@ contract HorosTest is Test {
         usdc.approve(address(vault), type(uint256).max);
 
         vm.prank(business);
-        id = registry.register("Northwind Plumbing Ltd", vendor);
+        id = registry.register("Northwind Plumbing Ltd", vendor, business);
 
         // Budgets are fail-closed: an uncapped counterparty cannot be paid at all.
         vm.prank(business);
@@ -118,7 +118,7 @@ contract HorosTest is Test {
         bytes32 succId,
         CounterpartyRegistry.AttestRole role,
         address signer,
-        bytes4 err
+        bytes memory err
     ) internal {
         CounterpartyRegistry.Succession memory s = registry.succession(succId);
         bytes memory pk = _sign(signer, _digest(s.counterpartyId, s.id, s.to, s.expiresAt));
@@ -169,13 +169,39 @@ contract HorosTest is Test {
     ///      Split into two tests so each has exactly one armed expectation.
     function test_strangerCannotAttestAsPayer() public {
         bytes32 succId = _propose(vendor, vendorNew);
+        // Even a *registered* stranger is refused: the payer half belongs to the
+        // designated business, and registration has never granted it.
+        vm.prank(attacker);
+        registry.registerPayer(id);
         _expectAttestRevert(
             succId,
             CounterpartyRegistry.AttestRole.Payer,
             attacker,
-            CounterpartyRegistry.NotRegisteredPayer.selector
+            abi.encodeWithSelector(CounterpartyRegistry.NotBusiness.selector, business, attacker)
         );
         assertEq(registry.activeAccount(id), vendor);
+    }
+
+    /// @dev The business can hand the payer side to a new key — and only the business can.
+    function test_onlyTheBusinessCanTransferTheBusiness() public {
+        vm.prank(attacker);
+        vm.expectRevert(
+            abi.encodeWithSelector(CounterpartyRegistry.NotBusiness.selector, business, attacker)
+        );
+        registry.transferBusiness(id, attacker);
+
+        vm.prank(business);
+        registry.transferBusiness(id, payer2);
+        assertEq(registry.get(id).business, payer2);
+
+        // And the old key is spent: it no longer satisfies the payer half.
+        bytes32 succId = _propose(vendor, vendorNew);
+        _expectAttestRevert(
+            succId,
+            CounterpartyRegistry.AttestRole.Payer,
+            business,
+            abi.encodeWithSelector(CounterpartyRegistry.NotBusiness.selector, payer2, business)
+        );
     }
 
     /// @dev Nor can an impostor sign for the account that already received the last payment.
@@ -201,13 +227,13 @@ contract HorosTest is Test {
             succId,
             CounterpartyRegistry.AttestRole.OldKey,
             vendorNew,
-            CounterpartyRegistry.SignerIsSuccessor.selector
+            abi.encodeWithSelector(CounterpartyRegistry.SignerIsSuccessor.selector)
         );
         _expectAttestRevert(
             succId,
             CounterpartyRegistry.AttestRole.Payer,
             vendorNew,
-            CounterpartyRegistry.SignerIsSuccessor.selector
+            abi.encodeWithSelector(CounterpartyRegistry.SignerIsSuccessor.selector)
         );
     }
 
@@ -259,7 +285,7 @@ contract HorosTest is Test {
             succId,
             CounterpartyRegistry.AttestRole.Quorum,
             business,
-            CounterpartyRegistry.SignatureReplay.selector
+            abi.encodeWithSelector(CounterpartyRegistry.SignatureReplay.selector)
         );
     }
 
@@ -326,7 +352,7 @@ contract HorosTest is Test {
     /// @dev An uncapped counterparty starts with a budget of zero.
     function test_newCounterpartyHasNoBudgetUntilAPersonGivesItOne() public {
         vm.prank(business);
-        bytes32 fresh = registry.register("Bright Spark Ltd", vendorNew);
+        bytes32 fresh = registry.register("Bright Spark Ltd", vendorNew, business);
 
         vm.prank(business);
         vm.expectRevert(abi.encodeWithSelector(CustodyVault.OverCounterpartyCap.selector, fresh, 10e6, 0));
@@ -480,7 +506,7 @@ contract HorosTest is Test {
         bytes32 nameHash = registry.canonicalNameHash("Northwind Plumbing Ltd");
         vm.prank(attacker);
         vm.expectRevert(abi.encodeWithSelector(CounterpartyRegistry.NameTaken.selector, nameHash, id));
-        registry.register("  NORTHWIND PLUMBING LTD  ", attacker);
+        registry.register("  NORTHWIND PLUMBING LTD  ", attacker, attacker);
     }
 
     /// @dev The id is derived from the name and the first account paid. Nothing to choose.
@@ -528,7 +554,7 @@ contract VaultOwnershipTest is Test {
         vm.prank(business);
         usdc.approve(address(vault), type(uint256).max);
         vm.prank(business);
-        id = registry.register("Ownership Test Co", vendor);
+        id = registry.register("Ownership Test Co", vendor, business);
         vm.prank(business);
         vault.setCounterpartyCap(id, 1_000e6);
         vm.prank(business);

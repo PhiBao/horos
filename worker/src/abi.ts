@@ -118,6 +118,11 @@ export const REGISTRY_READ_ABI = [
             "internalType": "address"
           },
           {
+            "name": "business",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
             "name": "registeredAt",
             "type": "uint64",
             "internalType": "uint64"

@@ -34,8 +34,20 @@
     "ARC_RPC_URLS": "https://rpc.testnet.arc.io,https://rpc.blockdaemon.testnet.arc.io,https://rpc.drpc.testnet.arc.io",
 
     // The live testnet deployment, from deployment.json.
-    "REGISTRY_ADDRESS": "0xe796227fb179e0b1ebd72515c8791108d8e7c0e5",
-    "VAULT_ADDRESS": "0x6988ade197baed5817f9090f3f42aed1bc9d5048"
+    "REGISTRY_ADDRESS": "0xc0804d616c8f3d5b42af6e19552eaca4feebe3fd",
+    "VAULT_ADDRESS": "0x0a61a1fec3a6059d2b30cba83fbec85e78576de9",
+
+    // Counterparties the scheduled check looks at, comma-separated. Empty means
+    // the loop runs and reports that it watches nothing — a cron that silently
+    // watches an empty list is how supervision evaporates, so the emptiness is
+    // reported rather than assumed.
+    "WATCH_IDS": "0xf85f374f0e39541527bc02e3a90ff684a86c9a099d8db994e09d94be651da9b6"
+  },
+
+  // Every twenty minutes. Often enough that a half-signed ceremony is noticed the
+  // same day, seldom enough that a handful of public-RPC reads barely register.
+  "triggers": {
+    "crons": ["*/20 * * * *"]
   },
 
   // No API key is in this file, and none can be. The judgment key is a Worker secret:

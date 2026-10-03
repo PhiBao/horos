@@ -25,7 +25,7 @@ verdict and every reason behind it. No account, no key, and the page cannot move
 money.
 
 **The record it acts on:** [a counterparty that has been through the
-ceremony](https://horos.kiter0211.workers.dev/c/0x1675d09c58082473285fe564f48d6b95d8ab65fcf405638390ea268a22165c29)
+ceremony](https://horos.kiter0211.workers.dev/c/0xf85f374f0e39541527bc02e3a90ff684a86c9a099d8db994e09d94be651da9b6)
 — two accounts, one of them a successor with two signatures behind it, all of it
 read from Arc. The three sample invoices on the decision card resolve to
 **RELEASE / HOLD / RELEASE** against this record.
@@ -159,30 +159,45 @@ advisory at all, because a model has nothing to add to it.
 
 ## The ceremony
 
-When a vendor's payment address changes, the old key and a payer must both sign
-for it. The proposed new account can supply neither.
+When a vendor's payment address changes, the old key and the business must both
+sign for it. The proposed new account can supply neither — and neither can
+anyone else standing in for the business. The payer half belongs to exactly one
+address, named at registration and transferable only by itself.
 
 ```
+register(name, firstAccount, business)   ← the business is named here, once
+        │
 proposeSuccession(id, to, window)
         │
         ├─ attest(OldKey)   signed by the account that received the last payment
-        ├─ attest(Payer)    signed by a registered payer
-        └─ quorum           optional, demanded by either party
+        ├─ attest(Payer)    signed by the business — the designated key, no other
+        └─ quorum           optional, demanded by business or account
         │
      activate()   ──► the new account is now active
 ```
+
+This used to say "a registered payer", and registration is permissionless — so
+any stranger could register and countersign their own redirect, and a single
+compromised vendor key was enough to move everything. The test suite proved it
+before the fix did: a stranger registering and signing activated a succession
+with the business never agreeing. Now the payer half has one right answer, and
+the adversarial tests assert the stranger's signature reverts.
 
 Properties the test suite asserts, most of which are *negations*:
 
 - an account cannot change without the old key's signature
 - the old key alone still gets nowhere
-- a payer alone still gets nowhere
+- the business alone still gets nowhere
+- a registered stranger's payer signature reverts — registration grants proposing
+  and quorum-attesting, never the payer half
 - the proposed recipient cannot sign for its own arrival, in any role
 - one signature from one party counts once; two parties may sign the same digest
 - an expired proposal cannot be revived
 - nobody may skip a state
 - the registry owner, who is neither the business nor the recipient, has no say
 - a payer's payment history cannot be forged — only the vault may record it
+- bricking the record (`discloseInheritance`) and demanding quorum are
+  business-or-account only — strangers used to be able to do both
 
 If the old key is gone forever, the only remaining path is `discloseInheritance`,
 which marks the counterparty `BROKEN` in public and **permanently**, and does not
@@ -199,8 +214,8 @@ lineage is not a system.
 
 | Party | Key | Can do | Cannot do |
 |---|---|---|---|
-| **Agent** | none — Circle holds it | execute payments, set budgets, stop the vault | authorise a change of destination |
-| **Business** | its own | authorise a change of destination | pay a non-active account |
+| **Agent** | none — Circle holds it | execute payments to the recorded account, submit others' signatures | authorise anything, set budgets, stop the vault, withdraw |
+| **Business** | its own | authorise a change of destination, set budgets, stop the vault, recover funds | pay a non-active account |
 | **Vendor** | its own | authorise its own new account | sign for itself as a payer or a recipient |
 
 The agent runs on a
@@ -209,19 +224,20 @@ private key does not exist in the application at all — Circle derives it from 
 entity secret and signs over HTTPS. There is nothing in the process for a prompt
 to reach.
 
-That matters more than usual here, because of what vault ownership *means*:
+That matters more than usual here, because of what vault ownership *means* — and
+an earlier version of this document got it wrong. It said handing the vault to an
+agent "cannot hand over the ability to spend", and annotated `transferOwnership`
+as one-way. Both were false: the owner can call `withdraw()` to an arbitrary
+address, and ownership transfers back as easily as it transfers out. A compromised
+agent holding the owner role could drain the vault in one call while "it can only
+ask" sat in this file.
 
-```solidity
-function transferOwnership(address newOwner) external onlyOwner;  // one-way
-```
-
-Ownership grants the ability to **set limits and pull the plug**. It never grants
-the ability to redirect a payment, because `pay()` takes no address. So handing
-the vault to an agent cannot hand over the ability to spend — only the ability to
-constrain.
-
-The result: **a fully compromised agent holding every budget still cannot send
-money to a new address. It can only ask.**
+So the owner is a business-held key, and never the agent wallet — not by policy,
+by deployment, verifiable onchain. The agent executes payments and submits other
+parties' signatures. It sets no budgets, stops nothing, withdraws nothing. A fully
+compromised agent, holding the Circle credentials that sign whatever it submits,
+still cannot send money anywhere `pay()` does not already resolve to — which is
+the recorded account and nothing else. *Now* it can only ask.
 
 ### Reading the invoice is the hard part
 

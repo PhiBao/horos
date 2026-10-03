@@ -5,16 +5,18 @@
  * deposited into it. On a testnet whose faucet is a captcha, that money is not
  * free, so it is worth pulling back before redeploying rather than after.
  *
- * The vault's owner is the only account that can call withdraw, so this signs
- * through Circle's developer-controlled wallets when the owner is the agent wallet.
+ * Only the vault owner can call withdraw. The owner is always a business-held
+ * local key — never the agent wallet, because an owner that the agent holds is
+ * an owner a compromised agent can drain with. So this signs locally, and it
+ * refuses to run against a vault owned by anything else.
  *
  *   pnpm tsx scripts/recover.ts 0x<old vault>
  */
 
 import {formatUnits} from "viem";
+import {privateKeyToAccount} from "viem/accounts";
 
-import {circleClient, circleExecute, getAgentWallet, settleCircleTransaction} from "../lib/circle.js";
-import {getPublicClient, currentNetwork, explorerTx} from "../lib/chain.js";
+import {getPublicClient, getLocalSigner, currentNetwork, explorerTx} from "../lib/chain.js";
 import {vaultAbi} from "../lib/abi.js";
 
 async function main(): Promise<void> {
@@ -24,9 +26,15 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const key = process.env.HOROS_DEPLOYER_PRIVATE_KEY as `0x${string}` | undefined;
+  if (!key) {
+    console.error("\n  HOROS_DEPLOYER_PRIVATE_KEY is not set. Recovery signs with the business key.\n");
+    process.exit(1);
+  }
+  const business = privateKeyToAccount(key);
+
   const client = getPublicClient();
-  const wallet = await getAgentWallet();
-  const circle = circleClient();
+  const wallet = getLocalSigner();
 
   const balance = (await client.readContract({
     address: vault,
@@ -50,34 +58,27 @@ async function main(): Promise<void> {
   })) as `0x${string}`;
 
   console.log(`  owner     ${owner}`);
-  console.log(`  agent     ${wallet.address}`);
+  console.log(`  business  ${business.address}`);
 
-  if (owner.toLowerCase() !== wallet.address.toLowerCase()) {
+  if (owner.toLowerCase() !== business.address.toLowerCase()) {
     console.error(
-      `\n  The vault's owner is ${owner}, not the Circle agent wallet.\n` +
-        `  Only the owner can call withdraw, so this script cannot move it.\n`,
+      `\n  The vault's owner is ${owner}, not this business key.\n` +
+        `  Only the owner can call withdraw, so this script cannot move it.\n` +
+        `  (If the owner is an agent wallet, that deployment predates the rule that\n` +
+        `  the agent must never hold owner powers. Withdraw it with that wallet's\n` +
+        `  own signing path instead.)\n`,
     );
     process.exit(1);
   }
 
-  // Circle signs this, so the agent never handles the key even for a recovery.
-  const id = await circleExecute(circle, {
-    walletId: wallet.id,
-    blockchain: "ARC-TESTNET",
-    contractAddress: vault,
+  const hash = await wallet.writeContract({
+    address: vault,
     abi: vaultAbi,
-    abiFunctionSignature: "withdraw(address,uint256)",
-    abiParameters: [wallet.address, balance.toString()],
+    functionName: "withdraw",
+    args: [business.address, balance],
   });
-
-  const result = await settleCircleTransaction(circle, id, {
-    onState: (state) => console.log(`    Circle: ${state}`),
-  });
-  if (!result.ok) {
-    console.error(`\n  withdraw failed: ${result.state}${result.reason ? ` — ${result.reason}` : ""}\n`);
-    process.exit(1);
-  }
-  console.log(`    withdrawn  ${result.txHash ? explorerTx(result.txHash) : id}`);
+  await client.waitForTransactionReceipt({hash});
+  console.log(`    withdrawn  ${explorerTx(hash)}`);
 
   const after = (await client.readContract({
     address: vault,
@@ -86,7 +87,7 @@ async function main(): Promise<void> {
   })) as bigint;
 
   console.log(`\n  vault now holds ${formatUnits(after, 6)} USDC`);
-  console.log(`  the money is now in ${wallet.address}\n`);
+  console.log(`  the money is now in ${business.address}\n`);
 }
 
 main();

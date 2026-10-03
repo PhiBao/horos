@@ -37,8 +37,9 @@ import {arcTestnet} from "viem/chains";
 import {REGISTRY_READ_ABI, VAULT_READ_ABI} from "./abi.js";
 import {resolveDestination, extractByRegex} from "../../lib/invoice.js";
 import {concern, judgeDocument} from "../../lib/judgment.js";
+import {classifyWatch, type WatchedCounterparty} from "../../lib/watch.js";
 import {decide, type Evidence, type Reason} from "../../lib/policy.js";
-import {screenCounterparty, toEvidence} from "../../lib/screening.js";
+import {screenCounterparty, toEvidence, unscreened} from "../../lib/screening.js";
 import {EXPLORER, POLICY_VERSION} from "./config.js";
 import {labelStatus, labelSuccessionState} from "../../lib/enums.js";
 
@@ -287,14 +288,22 @@ async function decideFromDocument(
 ): Promise<DecisionCard> {
   const startedAt = Date.now();
 
-  const [counterparty, budgets, parsed, screening] = await Promise.all([
+  const [counterparty, budgets, parsed] = await Promise.all([
     readCounterparty(env, id),
     readBudgets(env, id),
     Promise.resolve(extractByRegex(text)),
-    screenCounterparty("0x"),
   ]);
 
   const {account, candidates, ambiguous} = resolveDestination(text);
+
+  // Screened after resolving, against the address the document actually names.
+  // When nothing resolved there is nothing to screen, and the result says so
+  // rather than screening the zero address (whose nonce reads zero, which would
+  // report "novel" about nothing and file it as diligence).
+  const rpcUrls = env.ARC_RPC_URLS.split(",").map((u) => u.trim());
+  const screening = account
+    ? await screenCounterparty(account, {rpcUrls})
+    : unscreened("The document never resolved to an address, so there was nothing to screen.");
   const addressMatchesActive =
     account !== null && account.toLowerCase() === counterparty.activeAccount.toLowerCase();
 
@@ -453,7 +462,69 @@ function parseId(input: string | null): `0x${string}` | null {
   return m ? (m[0].toLowerCase() as `0x${string}`) : null;
 }
 
+/**
+ * Read every watched counterparty and classify it.
+ *
+ * Shared by the cron trigger and the /api/watch endpoint, so the scheduled check
+ * and a manual one cannot disagree. Reads only — the loop has no key, no signer,
+ * and nothing to submit with, which is also why it can run on someone else's
+ * schedule without becoming a second agent.
+ */
+async function checkWatchlist(env: Env): Promise<{id: string; findings: ReturnType<typeof classifyWatch>}[]> {
+  const ids = env.WATCH_IDS.split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => /^0x[0-9a-f]{64}$/.test(s)) as `0x${string}`[];
+
+  return Promise.all(
+    ids.map(async (id) => {
+      const cp = await readCounterparty(env, id);
+      const watched: WatchedCounterparty = {
+        id,
+        canonicalName: cp.canonicalName,
+        displayName: titleCase(cp.canonicalName),
+        status: cp.status,
+        activeAccount: cp.activeAccount,
+        isPayable: cp.isPayable,
+        accountCount: cp.accountCount,
+        successions: cp.successions.map((s) => ({
+          id: s.id,
+          to: s.to,
+          state: labelSuccessionState(s.state),
+          oldKeyAttested: s.oldKeyAttested,
+          payerAttested: s.payerAttested,
+        })),
+      };
+      return {id, findings: classifyWatch(watched)};
+    }),
+  );
+}
+
 export default {
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    // waitUntil, not awaited: a cron handler that exceeds its wall clock is
+    // retried, and a retry that re-reads is harmless but noisy. Log or lose it.
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const watched = await checkWatchlist(env);
+          const urgent = watched.flatMap((w) => w.findings).filter((f) => f.severity === "urgent");
+          console.log(
+            JSON.stringify({
+              watch: true,
+              ts: new Date().toISOString(),
+              counterparties: watched.length,
+              findings: watched.reduce((n, w) => n + w.findings.length, 0),
+              urgent: urgent.length,
+              detail: watched,
+            }),
+          );
+        } catch (err) {
+          console.error(JSON.stringify({watch: true, error: err instanceof Error ? err.message : String(err)}));
+        }
+      })(),
+    );
+  },
+
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -483,6 +554,21 @@ export default {
 
         const card = await decideFromDocument(env, id, text);
         return json(card, 200, {"cache-control": "no-store"});
+      }
+
+      // What the loop sees, on demand. Same function the cron calls, read live —
+      // no cache, so the timestamp is the truth about freshness.
+      if (path === "/api/watch") {
+        const watched = await checkWatchlist(env);
+        return json({
+          asOf: new Date().toISOString(),
+          watching: watched.length,
+          counterparties: watched,
+          note:
+            watched.length === 0
+              ? "The watchlist is empty (WATCH_IDS). A monitor watching nothing reports that, rather than reporting all-clear."
+              : "Findings are advisory. The registry is the record; this is one reading of it.",
+        });
       }
 
       // The public counterparty page. Anyone, no signup, no key.
