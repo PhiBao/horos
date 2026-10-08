@@ -1,0 +1,13 @@
+{
+  "name": "Horos",
+  "short_name": "Horos",
+  "description": "An agent that pays invoices, and refuses to send USDC to an address it cannot prove is the counterparty it already paid.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#2d3142",
+  "icons": [
+    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}

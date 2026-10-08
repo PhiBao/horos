@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Horos">
+  <title>Horos</title>
+  <desc>An H on an ink tile, its right stem in tangerine: two accounts, the second one new.</desc>
+  <!-- The mark is the product's rule, not a monogram. An H has two stems; the right
+       one is tangerine because it is the account that arrives by ceremony. Paper and
+       ink are the site's tokens, so the tab and the page agree. -->
+  <rect width="64" height="64" rx="14" fill="#2d3142"/>
+  <rect x="15" y="14" width="8" height="36" rx="2.5" fill="#f5f5f5"/>
+  <rect x="15" y="28" width="34" height="8" rx="2.5" fill="#f5f5f5"/>
+  <rect x="41" y="14" width="8" height="36" rx="2.5" fill="#eb6c36"/>
+</svg>
