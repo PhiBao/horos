@@ -9,6 +9,7 @@ cache/
 .env
 .env.deployed
 *.tsbuildinfo
+__pycache__/
 THESIS.md
 
 # Wrangler build output and local dev state (miniflare sqlite files, bundles).

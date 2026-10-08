@@ -280,44 +280,7 @@ looking at; the contract is there so it does not matter.
 
 ### The rule, and how it holds
 
-```mermaid
-flowchart TB
-  subgraph L2["L2 · Judgment — offchain, replaceable"]
-    INVOICE["invoice<br/>PDF, email, paste"]
-    EXTRACT["extract<br/><i>model proposes fields</i>"]
-    EVID["assemble evidence<br/>lineage · prior payments<br/>screening · amount · terms"]
-    POLICY["<b>decide</b><br/>RELEASE / HOLD / ESCALATE<br/><i>deterministic, in code</i>"]
-    INVOICE --> EXTRACT --> EVID --> POLICY
-  end
-
-  subgraph L1["L1 · The Rule — onchain, unforgeable"]
-    REG["<b>CounterpartyRegistry</b><br/>durable identity<br/>public lineage<br/><i>the ceremony</i>"]
-    VAULT["<b>CustodyVault</b><br/>holds the USDC<br/><i>pay takes no address</i>"]
-    REG <-->|"activeAccount"| VAULT
-  end
-
-  subgraph L3["L3 · The memory — the compounding asset"]
-    INDEX["indexer<br/>registry events"]
-    PAGE["public counterparty page<br/><i>no signup</i>"]
-    INDEX --> PAGE
-  end
-
-  POLICY -->|"proposal, never authority"| REG
-  VAULT --> ONCHAIN
-  REG -.->|"events"| INDEX
-
-  AGENT[["agent<br/>no private key"]] -.->|"submits"| VAULT
-  AGENT -.->|"submits"| REG
-  CIRCLE["Circle custody<br/>holds the key, signs"] --> VAULT
-  CIRCLE --> REG
-
-  ONCHAIN(["Arc · USDC<br/>sub-second · ~$0.001"])
-
-  style POLICY fill:#1f6feb22,stroke:#1f6feb,stroke-width:2px
-  style REG fill:#23863622,stroke:#238636,stroke-width:2px
-  style VAULT fill:#23863622,stroke:#238636,stroke-width:2px
-  style AGENT fill:#8957e522,stroke:#8957e5
-```
+![The rule, and how it holds: offchain judgment proposes, onchain contracts dispose, and a public counterparty record compounds. No path runs from the model to a release.](docs/diagrams/horos-rule.svg)
 
 Data flows **one way**. L2 proposes; L1 disposes. There is no arrow from the model
 into the release path, because there is no release path up here — only
@@ -325,50 +288,13 @@ into the release path, because there is no release path up here — only
 
 ### The ceremony
 
-The one sequence worth tracing end to end. Every arrow is a real transaction.
+The sequence worth tracing end to end, in two traces. Every arrow is a real transaction.
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant B as Business
-  participant A as Agent<br/>no key
-  participant C as Circle custody
-  participant R as Registry
-  participant V as Vault
-  participant W as Vendor
+![Release: seven messages move an ordinary invoice to the address on record.](docs/diagrams/horos-release.svg)
 
-  Note over B,V: the ordinary case
-  B->>A: invoice, address on record
-  A->>R: activeAccount(counterpartyId)
-  R-->>A: the address we have paid before
-  A->>C: vault.pay(counterpartyId, amount, ref)
-  C->>V: pay(bytes32, uint256, bytes32)
-  V->>R: isPayable(counterpartyId)
-  R-->>V: true
-  V->>W: USDC
+The refusal and the genuine move that follows it are a second trace over the same actors:
 
-  Note over B,V: the attack
-  B->>A: invoice, a DIFFERENT address
-  A->>A: policy decides HOLD
-  Note right of A: the contract is never called.<br/>and pay() could not be given<br/>the new address even if we tried.
-
-  Note over B,V: the ceremony
-  A->>C: registry.proposeSuccession(id, to, 7d)
-  C->>R: proposeSuccession
-  Note over W: the recipient can never be<br/>a signer for its own arrival
-  W-->>R: attest(OldKey) — signed by the<br/>account that was last paid
-  B-->>R: attest(Payer) — signed by the business
-  A->>C: registry.activate(successionId)
-  C->>R: activate
-  R->>R: lineage grows, permanently
-  Note over B,V: and now it is on the record
-  B->>A: invoice, the new address
-  A->>R: activeAccount(counterpartyId)
-  R-->>A: the new address, with two signatures behind it
-  A->>C: vault.pay(counterpartyId, amount, ref)
-  C->>V: pay
-  V->>W: USDC
-```
+![Refusal, then ceremony: a redirected invoice is held without a call, and the genuine move needs two signatures the recipient cannot supply.](docs/diagrams/horos-refusal-ceremony.svg)
 
 Note what is *absent* from the attack step: no call to `activate`, no signature
 from the recipient, no owner override, no prompt that could talk its way past.
@@ -376,39 +302,7 @@ The refusal is a property of the interface, not of a check that ran.
 
 ### Where the money and the authority actually sit
 
-```mermaid
-flowchart LR
-  subgraph agent["The agent — no private key"]
-    A1["read invoices"]
-    A2["assemble evidence"]
-    A3["propose a verdict"]
-  end
-
-  subgraph authority["Authority — three separate keys"]
-    B["Business<br/><i>authorises a change<br/>of destination</i>"]
-    W2["Vendor<br/><i>authorises its own<br/>new account</i>"]
-  end
-
-  subgraph custody["Custody — Circle holds it"]
-    C["developer-controlled wallet<br/><i>the only signer</i>"]
-  end
-
-  subgraph chain["Arc"]
-    V["CustodyVault<br/><b>pay takes a counterparty id, not an address</b>"]
-    R["CounterpartyRegistry<br/><b>no updateAccount fn</b>"]
-  end
-
-  agent -->|"submits transactions"| custody
-  custody --> chain
-  B -.->|"signs the payer attestation"| R
-  W2 -.->|"signs the old-key attestation"| R
-  V <--> R
-  V -->|"USDC"| recipient((recipient))
-
-  style V fill:#23863622,stroke:#238636,stroke-width:2px
-  style R fill:#23863622,stroke:#238636,stroke-width:2px
-  style C fill:#8957e522,stroke:#8957e5
-```
+![Where the money and the authority sit: the agent submits, the business and vendor sign, only the vault pays.](docs/diagrams/horos-authority.svg)
 
 The agent holds none of the three keys. A fully compromised agent that can
 submit any transaction it likes still cannot authorise a change of destination,

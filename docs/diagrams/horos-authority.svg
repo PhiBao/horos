@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="horos-authority-title horos-authority-desc" id="horos-authority-root">
+        <title id="horos-authority-title">Where the money and the authority sit</title>
+        <desc id="horos-authority-desc">The agent submits and proposes while the business and vendor sign; only the vault pays, and only to the recorded account.</desc>
+        <defs>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #horos-authority-root { font-family: 'Geist', system-ui, sans-serif; color: #2d3142; }
+      #horos-authority-root .diagram-container { width: 100%; overflow-x: auto; }
+      #horos-authority-root .diagram-container { overflow-x: visible; }</style>
+          <marker id="horos-authority-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="horos-authority-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="horos-authority-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+<!-- Zone: authority -->
+        <rect x="300" y="40" width="620" height="150" rx="8" fill="#2d3142" fill-opacity="0.02" stroke="#2d3142" stroke-opacity="0.10" stroke-width="0.8"/>
+        <rect x="308" y="44" width="138" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="377" y="53" fill="#2d3142" fill-opacity="0.40" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">AUTHORITY · TWO KEYS</text>
+        <!-- Zone: custody -->
+        <rect x="280" y="264" width="220" height="116" rx="8" fill="#2d3142" fill-opacity="0.02" stroke="#2d3142" stroke-opacity="0.10" stroke-width="0.8"/>
+        <rect x="288" y="268" width="114" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="345" y="277" fill="#2d3142" fill-opacity="0.40" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">CUSTODY · CIRCLE</text>
+        <!-- Zone: chain -->
+        <rect x="540" y="214" width="380" height="276" rx="8" fill="#2d3142" fill-opacity="0.02" stroke="#2d3142" stroke-opacity="0.10" stroke-width="0.8"/>
+        <rect x="548" y="218" width="96" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="596" y="227" fill="#2d3142" fill-opacity="0.40" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">ARC · ONCHAIN</text>
+        <!-- agent submits into custody -->
+        <line x1="240" y1="322" x2="300" y2="322" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#horos-authority-arrow)"/>
+        <!-- custody forwards into the registry -->
+        <line x1="460" y1="322" x2="560" y2="322" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#horos-authority-arrow)"/>
+        <rect x="477.5" y="302" width="55" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="505" y="311" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FORWARDS</text>
+        <!-- business signs the payer half -->
+        <path d="M480,174 L480,294 Q480,302 488,302 L560,302" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#horos-authority-arrow)"/>
+        <rect x="481" y="282" width="70" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="516" y="291" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PAYER SIGNS</text>
+        <!-- vendor signs the old-key half -->
+        <path d="M760,174 L760,192 Q760,200 752,200 L668,200 Q660,200 660,208 L660,260" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#horos-authority-arrow)"/>
+        <rect x="670" y="180" width="80" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="710" y="189" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OLD-KEY SIGNS</text>
+        <!-- USDC settles to the recorded account -->
+        <line x1="760" y1="432" x2="824" y2="432" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#horos-authority-arrow-accent)"/>
+        <rect x="774.5" y="412" width="35" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="792" y="421" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">USDC</text>
+        <!-- no direct payment -->
+        <path d="M150,364 L150,500 Q150,508 158,508 L847,508 Q855,508 855,500 L855,478" fill="none" stroke="#7a8399" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#horos-authority-arrow)"/>
+        <!-- stopped before the recipient -->
+        <circle cx="855" cy="478" r="7" fill="#f5f5f5" stroke="#7a8399" stroke-width="1.4"/>
+        <line x1="851.5" y1="474.5" x2="858.5" y2="481.5" stroke="#7a8399" stroke-width="1.4"/>
+        <line x1="858.5" y1="474.5" x2="851.5" y2="481.5" stroke="#7a8399" stroke-width="1.4"/>
+        <rect x="767" y="485" width="80" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="807" y="494" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">NO DIRECT PAY</text>
+        <!-- Node: agent task -->
+        <rect x="40" y="280" width="200" height="84" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="280" width="200" height="84" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-opacity="0.30" stroke-width="1"/>
+        <text x="140" y="319" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Agent work</text>
+        <text x="140" y="337" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">reads · assembles · proposes</text>
+        <!-- Node: business -->
+        <rect x="320" y="72" width="280" height="102" rx="6" fill="#f5f5f5"/>
+        <rect x="320" y="72" width="280" height="102" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-opacity="0.30" stroke-width="1"/>
+        <text x="460" y="120" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Business</text>
+        <text x="460" y="138" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">authorises destination</text>
+        <!-- Node: vendor -->
+        <rect x="620" y="72" width="280" height="102" rx="6" fill="#f5f5f5"/>
+        <rect x="620" y="72" width="280" height="102" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-opacity="0.30" stroke-width="1"/>
+        <text x="760" y="120" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Vendor</text>
+        <text x="760" y="138" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">authorises own account</text>
+        <!-- Node: wallet -->
+        <rect x="300" y="280" width="160" height="84" rx="6" fill="#f5f5f5"/>
+        <rect x="300" y="280" width="160" height="84" rx="6" fill="#4f5d75" fill-opacity="0.10" stroke="#7a8399" stroke-width="1"/>
+        <text x="380" y="319" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Circle wallet</text>
+        <text x="380" y="337" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">the only signer</text>
+        <!-- Node: registry -->
+        <rect x="560" y="260" width="200" height="84" rx="6" fill="#f5f5f5"/>
+        <rect x="560" y="260" width="200" height="84" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-opacity="0.30" stroke-width="1"/>
+        <text x="660" y="299" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">CounterpartyRegistry</text>
+        <text x="660" y="317" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">no updateAccount fn</text>
+        <!-- Node: vault FOCAL -->
+        <rect x="560" y="390" width="200" height="84" rx="6" fill="#f5f5f5"/>
+        <rect x="560" y="390" width="200" height="84" rx="6" fill="#eb6c36" fill-opacity="0.08" stroke="#eb6c36" stroke-width="1.5"/>
+        <text x="660" y="429" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">CustodyVault</text>
+        <text x="660" y="447" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">pay takes an id, not address</text>
+        <!-- Node: recipient -->
+        <rect x="824" y="396" width="72" height="72" rx="36" fill="#f5f5f5"/>
+        <circle cx="860" cy="432" r="36" fill="#4f5d75" fill-opacity="0.10" stroke="#7a8399" stroke-width="1"/>
+        <text x="860" y="436" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">recipient</text>
+        <line x1="30" y1="524" x2="930" y2="524" stroke="#2d3142" stroke-opacity="0.10" stroke-width="0.8"/>
+        <line x1="60" y1="541" x2="100" y2="541" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#horos-authority-arrow)"/>
+        <text x="112" y="544" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">SUBMITS · SIGNS</text>
+        <line x1="247" y1="541" x2="287" y2="541" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#horos-authority-arrow-accent)"/>
+        <text x="299" y="544" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">USDC SETTLES</text>
+        <line x1="419" y1="541" x2="451" y2="541" stroke="#7a8399" stroke-width="1" stroke-dasharray="5,4"/>
+        <circle cx="459" cy="541" r="6" fill="#f5f5f5" stroke="#7a8399" stroke-width="1.2"/>
+        <line x1="455.8" y1="537.8" x2="462.2" y2="544.2" stroke="#7a8399" stroke-width="1.2"/>
+        <line x1="462.2" y1="537.8" x2="455.8" y2="544.2" stroke="#7a8399" stroke-width="1.2"/>
+        <text x="471" y="544" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">BLOCKED — NO DIRECT PAY</text>
+        <rect x="646" y="533" width="30" height="14" rx="3" fill="#eb6c36" fill-opacity="0.08" stroke="#eb6c36" stroke-width="1.4"/>
+        <text x="698" y="544" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">FOCAL · VAULT</text>      </svg>

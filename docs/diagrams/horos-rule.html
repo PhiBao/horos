@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The rule, and how it holds</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Geist', system-ui, sans-serif; background: #f5f5f5; color: #2d3142;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.66rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase; color: #4f5d75; margin-bottom: 0.5rem; }
+    h1 { font-family: 'Instrument Serif', serif; font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">ARCHITECTURE · HOROS</p>
+    <h1>The rule, and how it holds</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="horos-rule-title horos-rule-desc">
+        <title id="horos-rule-title">Horos — the rule, and how it holds</title>
+        <desc id="horos-rule-desc">Offchain judgment proposes while onchain contracts dispose; no path runs from the model to a release.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+<!-- Zone: L2 judgment -->
+        <rect x="210" y="40" width="540" height="166" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="218" y="44" width="238" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="337" y="53" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">L2 · JUDGMENT · OFFCHAIN, REPLACEABLE</text>
+        <!-- Zone: L1 rule -->
+        <rect x="210" y="264" width="540" height="150" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="218" y="268" width="232" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="334" y="277" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">L1 · THE RULE · ONCHAIN, UNFORGEABLE</text>
+        <!-- Zone: L3 memory -->
+        <rect x="210" y="426" width="540" height="88" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="218" y="430" width="202" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="319" y="439" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">L3 · MEMORY · COMPOUNDING ASSET</text>
+        <!-- proposal, never authority -->
+        <path d="M620,174 L620,222 Q620,230 612,230 L359,230 Q351,230 351,238 L351,300" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="532" y="194" width="80" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="572" y="203" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROPOSAL ONLY</text>
+        <line x1="426" y1="347" x2="526" y2="347" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="433.5" y="327" width="85" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="476" y="336" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ACTIVE ACCOUNT</text>
+        <!-- events feed -->
+        <path d="M250,394 L250,440" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="258" y="406" width="45" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280.5" y="415" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">EVENTS</text>
+        <!-- agent submits to vault -->
+        <path d="M90,334 L90,498 Q90,506 98,506 L605,506 Q613,506 613,498 L613,394" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="621" y="448" width="50" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="646" y="457" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SUBMITS</text>
+        <!-- agent submits to registry -->
+        <path d="M140,334 L140,402 Q140,410 148,410 L292,410 Q300,410 300,402 L300,394" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="148" y="366" width="50" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="173" y="375" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SUBMITS</text>
+        <!-- Circle signs into vault -->
+        <path d="M770,278 L708,278 Q700,278 700,286 L700,300" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- Circle signs into registry -->
+        <path d="M845,334 L845,274 Q845,266 837,266 L408,266 Q400,266 400,274 L400,300" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M710,174 V250" fill="none" stroke="#7a8399" stroke-width="1" stroke-dasharray="5,4"/>
+        <!-- stopped before the trust boundary -->
+        <circle cx="710" cy="250" r="7" fill="#f5f5f5" stroke="#7a8399" stroke-width="1.4"/>
+        <line x1="706.5" y1="246.5" x2="713.5" y2="253.5" stroke="#7a8399" stroke-width="1.4"/>
+        <line x1="713.5" y1="246.5" x2="706.5" y2="253.5" stroke="#7a8399" stroke-width="1.4"/>
+        <rect x="637" y="202" width="65" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="669.5" y="211" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">NO RELEASE</text>
+        <!-- Node: agent -->
+        <rect x="40" y="250" width="150" height="84" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="250" width="150" height="84" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <text x="115" y="289" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Agent</text>
+        <text x="115" y="307" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">no private key</text>
+        <!-- Node: circle -->
+        <rect x="770" y="250" width="150" height="84" rx="6" fill="#f5f5f5"/>
+        <rect x="770" y="250" width="150" height="84" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <text x="845" y="289" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Circle custody</text>
+        <text x="845" y="307" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">holds the key · signs</text>
+        <!-- Node: invoice+extract -->
+        <rect x="226" y="72" width="160" height="102" rx="6" fill="#f5f5f5"/>
+        <rect x="226" y="72" width="160" height="102" rx="6" fill="#f5f5f5" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="306" y="113" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Invoice in</text>
+        <text x="306" y="131" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">pdf · email · paste</text>
+        <text x="306" y="145" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">model proposes fields</text>
+        <!-- Node: evidence -->
+        <rect x="401" y="72" width="160" height="102" rx="6" fill="#f5f5f5"/>
+        <rect x="401" y="72" width="160" height="102" rx="6" fill="#f5f5f5" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="481" y="113" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Assemble evidence</text>
+        <text x="481" y="131" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">payments · screening</text>
+        <text x="481" y="145" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">amount · terms</text>
+        <!-- Node: policy -->
+        <rect x="576" y="72" width="160" height="102" rx="6" fill="#f5f5f5"/>
+        <rect x="576" y="72" width="160" height="102" rx="6" fill="#f5f5f5" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="656" y="113" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Decide</text>
+        <text x="656" y="131" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">RELEASE · HOLD · ESCALATE</text>
+        <text x="656" y="145" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">deterministic, in code</text>
+        <!-- Node: registry -->
+        <rect x="226" y="300" width="200" height="94" rx="6" fill="#f5f5f5"/>
+        <rect x="226" y="300" width="200" height="94" rx="6" fill="#f5f5f5" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="326" y="337" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">CounterpartyRegistry</text>
+        <text x="326" y="355" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">durable identity</text>
+        <text x="326" y="369" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">public lineage · ceremony</text>
+        <!-- Node: vault FOCAL -->
+        <rect x="526" y="300" width="208" height="94" rx="6" fill="#f5f5f5"/>
+        <rect x="526" y="300" width="208" height="94" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.5"/>
+        <text x="630" y="337" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">CustodyVault</text>
+        <text x="630" y="355" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">holds the USDC</text>
+        <text x="630" y="369" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">pay takes no address</text>
+        <!-- Node: page -->
+        <rect x="226" y="442" width="300" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="226" y="442" width="300" height="56" rx="6" fill="#f5f5f5" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="376" y="467" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Counterparty page</text>
+        <text x="376" y="485" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">no signup · public</text>
+        <line x1="30" y1="524" x2="930" y2="524" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <line x1="60" y1="541" x2="100" y2="541" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="112" y="544" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">PROPOSES · READS</text>
+        <line x1="252" y1="541" x2="292" y2="541" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <text x="304" y="544" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">SUBMITS · EMITS</text>
+        <line x1="439" y1="541" x2="471" y2="541" stroke="#7a8399" stroke-width="1" stroke-dasharray="5,4"/>
+        <circle cx="479" cy="541" r="6" fill="#f5f5f5" stroke="#7a8399" stroke-width="1.2"/>
+        <line x1="475.8" y1="537.8" x2="482.2" y2="544.2" stroke="#7a8399" stroke-width="1.2"/>
+        <line x1="482.2" y1="537.8" x2="475.8" y2="544.2" stroke="#7a8399" stroke-width="1.2"/>
+        <text x="491" y="544" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">BLOCKED — NO RELEASE PATH</text>
+        <rect x="676" y="533" width="30" height="14" rx="3" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.4"/>
+        <text x="728" y="544" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">FOCAL · THE VAULT</text>      </svg>
+    </div>
+  </div>
+</body>
+</html>
