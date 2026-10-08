@@ -1,10 +1,11 @@
 # The demo video
 
-**`video/horos-demo.mp4` — 2:36, narrated, subtitled, 1920×1080.**
+**`video/horos-demo.mp4` — 2:55, narrated, subtitled, 1920×1080.**
 
-Seven segments: the hook, the problem, the interface rule, the live refusal on Arc
-mainnet, the public record, the chain read, and the close. Every number, address and
-transaction in it exists in this repository or on the chain; nothing is illustrated.
+Eight segments: the hook, the problem, the interface rule, the live refusal on Arc
+mainnet, the chain picker and the custody difference between the two deployments, the
+public record, the chain read, and the close. Every number, address and transaction in
+it exists in this repository or on the chain; nothing is illustrated.
 
 ## How it is made
 
@@ -19,10 +20,10 @@ from `docs/video/` rather than re-performed.
 | [`docs/video/video.json`](video/video.json) | branding, voice, theme, subtitle style |
 | [`docs/video/horos.srt`](video/horos.srt) | the subtitles that were burned in, as a sidecar |
 
-The three `page` scenes drive the **live mainnet site** in a real browser: they load
-the counterparty, click the sample invoices, press Decide, and scroll to the reasons
-and the lineage. If the site changes shape, those scenes fail loudly rather than
-quietly showing a stale screenshot.
+The three `page` scenes drive the **live site** in a real browser: they load the
+counterparty, click the sample invoices, press Decide, scroll to the reasons and the
+lineage, and switch the chain picker. If the site changes shape, those scenes fail
+loudly rather than quietly showing a stale screenshot.
 
 To rebuild, from a checkout of the template:
 
@@ -51,16 +52,16 @@ Worth recording, because it is the argument for having a gate at all:
 
 ## Notes
 
-- **The video predates the chain picker.** It was recorded against the mainnet URL
-  while that deployment read one chain; the picker and the "Load our verified record"
-  button landed afterwards and are not in it. Nothing in the video contradicts them —
-  the URL it shows still works and still defaults to mainnet — but the video does not
-  show the newer controls. `story.json` here matches the video as uploaded; the
-  template's copy has the picker version if a re-record is ever wanted.
-
+- **The chain beat is timed to the narration, and the first cut of it was not.** The
+  picker switches to testnet for the sentence about testnet and back for the sentence
+  after it. The first attempt had the right pictures in the wrong order — testnet on
+  screen while the voice said "mainnet runs in real USDC" — which nothing but the
+  frames would have shown. The cue times in `horos.srt` are what the actions are now
+  aligned to, so re-voicing the segment means re-checking that beat.
 - The narration is **generated**, so it can be re-voiced by changing `story.json`
   and re-running. There is no recorded human audio to keep in sync.
-- The video was **not** rebuilt when the mainnet vault was swept. The ceremony it
-  shows is permanent and on the explorer; the vault balance is not part of the
-  argument, and the record page states the current balance honestly.
+- The mainnet vault was swept before this cut, so the decision card in it shows the
+  vault as it now is — empty. The ceremony it shows is permanent and on the explorer;
+  the balance is not part of the argument, and the record page states the current
+  balance honestly.
 - No competitor is named anywhere in the narration or on screen.

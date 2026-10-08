@@ -15,7 +15,7 @@
  * one that always shows its work lets them disagree with it.
  */
 
-import {initNetwork, mountPicker, networkKey, withNetwork, demoCounterpartyId} from "./network.js";
+import {initNetwork, mountPicker, networkKey, networkExplorer, withNetwork, demoCounterpartyId} from "./network.js";
 
 const $ = (s) => document.querySelector(s);
 
@@ -35,7 +35,9 @@ const short = (a) => (a && a.length > 12 ? `${a.slice(0, 8)}…${a.slice(-6)}` :
 let explorer = null;
 const explorerFor = (card) => {
   explorer = card?.chain?.explorer ?? explorer;
-  return explorer ?? "https://explorer.testnet.arc.io";
+  // The picker knows the chain before any card exists, so it is the fallback rather
+  // than a constant naming one chain or the other.
+  return explorer ?? networkExplorer() ?? "";
 };
 
 /* --------------------------------------------------------------------------
@@ -453,8 +455,12 @@ async function main() {
     }
   });
 
-  // The footer's explorer link is a claim about which chain this is; take it from
-  // the API on first load rather than trusting a constant written months ago.
+  // The footer's explorer link is a claim about which chain this is. The picker
+  // already knows, so it is set now - and confirmed against /healthz on first load
+  // rather than trusting a constant written months ago.
+  const explorerLink = document.querySelector("[data-explorer-link]");
+  if (explorerLink && networkExplorer()) explorerLink.href = networkExplorer();
+
   fetch("/healthz")
     .then((r) => r.json())
     .then((h) => {

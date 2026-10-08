@@ -35,7 +35,7 @@
     // shows numbers that look real and are not.
     //
     //   "arc-testnet" | "arc-mainnet"
-    "HOROS_NETWORK": "arc-testnet",
+    "HOROS_NETWORK": "arc-mainnet",
 
     // Both deployments, keyed by chain. Written by `pnpm sync:site` from
     // deployments/*.json, so the site and the deployment records cannot disagree.
@@ -47,7 +47,7 @@
     // loop runs and reports that it watches nothing — a cron that silently watches
     // an empty list is how supervision evaporates, so the emptiness is reported
     // rather than assumed.
-    "WATCH_IDS": "0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d"
+    "WATCH_IDS": "0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b"
   },
 
   // The decision endpoint spends money per request (chain reads plus a paid judgment

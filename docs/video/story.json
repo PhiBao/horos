@@ -90,13 +90,26 @@
       "text": "This is the live deployment on Arc mainnet, reading real USDC. A routine invoice releases: the address is the one already on record. Now one arrives from the same supplier, with a changed account, urgency, and an instruction not to verify. The policy holds it, and it names the sentence that gave the document away.",
       "scene": {
         "kind": "page",
-        "src": "https://horos-mainnet.kiter0211.workers.dev/?cp=0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b",
+        "src": "https://horos.kiter0211.workers.dev/?cp=0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b",
         "zoom": 1.5,
         "wait_for": [
           "text=Known:"
         ],
         "settle": 0.8,
         "actions": [
+          {
+            "action": "wait",
+            "sec": 0.8
+          },
+          {
+            "action": "click",
+            "sel": "#verified",
+            "glide": 0.3,
+            "after": 0.6,
+            "wait_for": [
+              "text=Loaded"
+            ]
+          },
           {
             "action": "click",
             "sel": "[data-sample=\"ordinary\"]",
@@ -114,7 +127,7 @@
           },
           {
             "action": "wait",
-            "sec": 1.0
+            "sec": 0.8
           },
           {
             "action": "click",
@@ -139,7 +152,58 @@
             "at": 0.1
           }
         ],
-        "hold": 0.4
+        "hold": 0.3
+      }
+    },
+    {
+      "id": "s4b_chains",
+      "text": "The site reads two chains. Mainnet runs in real USDC, signed by a local key. Testnet runs the same contracts keyless - Circle holds the only key. The page says which one you are reading, because that difference is a custody claim and not a setting.",
+      "scene": {
+        "kind": "page",
+        "src": "https://horos.kiter0211.workers.dev/",
+        "zoom": 1.2,
+        "wait_for": [
+          "#network:not([hidden])"
+        ],
+        "settle": 0.8,
+        "actions": [
+          {
+            "action": "wait",
+            "sec": 2.6
+          },
+          {
+            "action": "scrollTo",
+            "sel": ".picker",
+            "at": 0.0,
+            "dur": 0.5,
+            "after": 0.2
+          },
+          {
+            "action": "wait",
+            "sec": 3.2
+          },
+          {
+            "action": "select",
+            "sel": "#network",
+            "label": "Arc Testnet",
+            "after": 0.6
+          },
+          {
+            "action": "wait",
+            "sec": 4.4
+          },
+          {
+            "action": "select",
+            "sel": "#network",
+            "label": "Arc",
+            "after": 0.8
+          },
+          {
+            "action": "wait",
+            "sec": 1.2
+          }
+        ],
+        "hold": 0.5
       }
     },
     {
@@ -147,7 +211,7 @@
       "text": "When a supplier genuinely changes accounts, that is a ceremony. The account that was last paid agrees to be replaced. The business agrees, with a key named at registration that nobody else can use. The new account can never sign for its own arrival. The lineage is public, and it is not editable: every entry is a transaction.",
       "scene": {
         "kind": "page",
-        "src": "https://horos-mainnet.kiter0211.workers.dev/c/0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b",
+        "src": "https://horos.kiter0211.workers.dev/c/0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b",
         "zoom": 1.5,
         "wait_for": [
           ".lineage li"
@@ -155,15 +219,13 @@
         "settle": 0.7,
         "actions": [
           {
-            "action": "scrollTo",
-            "dur": 1.1,
-            "after": 1.4,
-            "y": 0.1
+            "action": "wait",
+            "sec": 1.0
           },
           {
             "action": "scrollTo",
-            "dur": 1.2,
-            "after": 2.0,
+            "dur": 1.0,
+            "after": 1.2,
             "sel": "[data-block=\"succession\"]",
             "at": 0.06
           },
@@ -174,7 +236,7 @@
           {
             "action": "scrollTo",
             "dur": 1.1,
-            "after": 2.2,
+            "after": 2.4,
             "sel": "[data-block=\"facts\"]",
             "at": 0.08
           }

@@ -74,10 +74,9 @@ or on a hardware wallet: the owner can call `withdraw()` to any address.
 # 1. Deploy. Refuses without an explicit global cap.
 HOROS_GLOBAL_CAP=2 pnpm deploy:mainnet
 
-# 2. Point the mainnet site at it, and deploy the second Worker.
-pnpm sync:site:mainnet
-pnpm site:deploy:mainnet
-pnpm wrangler secret put JUDGMENT_API_KEY --config wrangler.mainnet.jsonc
+# 2. Point the one site at it, and deploy.
+pnpm sync:site
+pnpm site:deploy
 ```
 
 Then the ceremony, at demonstration amounts rather than testnet's:
@@ -92,24 +91,23 @@ on mainnet — a test API key is refused for `ARC` with a 400, which is verified
 
 ## Which network is which
 
-Both chains are readable from either URL. The chain picker in the header switches
-between them, the choice travels as `?network=`, and the custody line beside the
-picker changes with it. The two Worker URLs exist only so that a link can default to
-the chain it means:
+One site reads both chains. The chain picker in the header switches between them, the
+choice travels as `?network=`, and the custody line beside the picker changes with it.
+The default a fresh visitor lands on is mainnet, because that is the deployment the
+ceremony was performed against:
 
 | | Testnet | Mainnet |
 |---|---|---|
-| Default chain | `arc-testnet` | `arc-mainnet` |
-| Worker | `horos` | `horos-mainnet` |
-| Config | `wrangler.jsonc` | `wrangler.mainnet.jsonc` |
+| `HOROS_NETWORK` (the default) | `arc-testnet` | `arc-mainnet` ← what the site ships with |
 | Addresses | `deployments/arc-testnet.json` | `deployments/arc-mainnet.json` |
 | Writable RPC | `HOROS_RPC_URL_TESTNET` | `HOROS_RPC_URL_MAINNET` |
 
-The two config files are written by one command, `pnpm sync:site`, and differ by
-exactly one variable — the default chain. Everything else is derived from
-`HOROS_DEPLOYMENTS`, a single JSON map written from `deployments/*.json`. Writing one
-network at a time is how the two configs drifted apart in the first place: the site
-was once pointed at a stale deployment for hours because a second deploy was never
+There is one Worker and one config. Everything the site knows about a chain is
+derived from `HOROS_DEPLOYMENTS`, a single JSON map written from `deployments/*.json`
+by `pnpm sync:site` — which also writes `HOROS_NETWORK` and the watchlist, so the
+default chain is a fact about the deployment rather than something someone remembers
+to set. Writing one network at a time is how this went wrong before: the site was
+once pointed at a stale deployment for hours because a second deploy was never
 followed by a second sync, and only the screen recording caught it.
 
 `GET /api/networks` publishes the map to the interface, which is why the picker needs

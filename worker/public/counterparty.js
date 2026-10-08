@@ -10,12 +10,24 @@
  *
  * Read-only, like everything else on this site.
  */
-import {initNetwork, mountPicker, withNetwork, demoCounterpartyId, networkKey} from "./network.js";
+import {
+  initNetwork,
+  mountPicker,
+  networkExplorer,
+  networkKey,
+  networkLabel,
+  networkList,
+  withNetwork,
+  withNetworkOf,
+  demoCounterpartyId,
+} from "./network.js";
 
 const $ = (sel) => document.querySelector(sel);
 
 /** Set from the API response: the page describes a chain it does not choose. */
-let EXPLORER = "https://explorer.testnet.arc.io";
+/* Set from the record response, and from the picker before that - never a constant
+   naming one chain, because this page tells a reader where to verify a transaction. */
+let EXPLORER = "";
 
 /** Shorten an address for display without losing the ends, which is where diffs show. */
 const short = (a) => (a && a.length > 12 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a);
@@ -28,7 +40,7 @@ function idFromPath() {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-function render(data) {
+async function render(data) {
   const cp = data.counterparty;
   EXPLORER = data.chain?.explorer ?? EXPLORER;
   const el = $("#record");
@@ -36,9 +48,30 @@ function render(data) {
 
   if (!cp.exists) {
     const demo = demoCounterpartyId();
+    // An id is derived from the registry address, so the same counterparty has one id
+    // per chain and a link to a record can arrive while the other chain is selected.
+    // Since the picker remembers the reader's choice, that is a dead end waiting for
+    // anyone who tries testnet and then follows a link from the README. So before
+    // saying "no record", ask the other chains whether they know this id - a fact read
+    // from them, not a guess about which chain the reader meant.
+    const elsewhere = (await findOnOtherChains(cp.id)).filter((n) => n.key !== networkKey());
     el.innerHTML = `
-      <h1 class="verdict hold">No record</h1>
+      <h1 class="verdict hold">No record${
+        elsewhere.length ? ` on ${esc(networkLabel())}` : ""
+      }</h1>
       <p class="headline">Nobody has ever paid this counterparty, so there is nothing to show and nothing on file to verify against.</p>
+      ${
+        elsewhere.length
+          ? elsewhere
+              .map(
+                (n) =>
+                  `<p class="found-elsewhere">This counterparty does have a record on
+                   <strong>${esc(n.label)}</strong> &mdash;
+                   <a href="${esc(withNetworkOf(n.key, `/c/${cp.id}`))}">open it there</a>.</p>`,
+              )
+              .join("")
+          : ""
+      }
       <p class="prose-p">That is the honest answer rather than an error. A counterparty id is derived
       from a name and the first account paid, so an id with no record means either that no payment has
       been made yet, or that somebody typed the id wrong. In both cases the useful thing to say is
@@ -157,11 +190,43 @@ activeAccount(${esc(cp.id)}) → ${esc(cp.activeAccount)}</pre>
     </p>`;
 }
 
+/**
+ * Which other chains know this id.
+ *
+ * Asked of each chain's own registry through the same API, and a failure is reported
+ * as "not there" rather than thrown: this runs on the path that is already telling a
+ * reader there is nothing to show, and turning that into an error would replace a
+ * clear answer with a stack trace.
+ */
+async function findOnOtherChains(id) {
+  const others = networkList().filter((n) => n.key !== networkKey());
+  const found = await Promise.all(
+    others.map(async (n) => {
+      try {
+        const res = await fetch(
+          `/api/counterparty/${encodeURIComponent(id)}?network=${encodeURIComponent(n.key)}`,
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        // `exists` lives under `counterparty` in this response - worth naming, since
+        // reading it off the top level is a silent `undefined` and the offer just
+        // never appears.
+        return data.counterparty?.exists ? n : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return found.filter(Boolean);
+}
+
 async function main() {
   await initNetwork();
+  EXPLORER = networkExplorer() ?? "";
   mountPicker($("#network"), async () => {
     // Same id, other chain. It may not exist there, and "no record" is the honest
     // answer — the page offers that chain's own verified record underneath.
+    EXPLORER = networkExplorer() ?? "";
     await load();
   });
 
@@ -200,7 +265,7 @@ async function load() {
     const res = await fetch(withNetwork(`/api/counterparty/${encodeURIComponent(id)}`));
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `the registry read failed (${res.status})`);
-    render(data);
+    await render(data);
   } catch (err) {
     el.innerHTML = `
       <h1 class="verdict hold">Could not read the registry</h1>

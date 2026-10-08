@@ -98,7 +98,7 @@
       card</a>, with three sample invoices that resolve to release, refuse, refuse.
     </p>
     <p>
-      <a href="/" data-record-link="0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d">A counterparty
+      <a href="/" data-record-link>A counterparty
       record</a>, after a supplier genuinely changed accounts &mdash; two signatures, neither of them the
       recipient's.
     </p>
@@ -113,25 +113,39 @@
     flattering one.</p>
   </section>
 
-  <p class="meta">Arc testnet · chain 5042002 · no real funds are involved at any point</p>
+  <p class="meta" data-chain-note>Arc Testnet · chain 5042002 · no real funds are involved at any point</p>
 </main>
 
 <script type="module">
-  // The only scripted thing here is the chain picker: the links on this page point at
-  // a specific deployment's record, so the page has to know which one it is naming.
-  import {initNetwork, mountPicker, withNetwork} from "/network.js";
+  // The chain picker, and the two claims on this page that depend on it.
+  //
+  // This page asks a business to hand over an invoice, so it is the last place on the
+  // site where a stale chain label is acceptable. Both the record it links to and the
+  // footer - which says whether real funds are involved - are read from the
+  // selection rather than written into the markup. The previous version hardcoded a
+  // testnet counterparty id, so switching to mainnet produced a link to a record that
+  // does not exist there, under a footer that still said testnet.
+  import {initNetwork, mountPicker, withNetwork, demoCounterpartyId, networkKey} from "/network.js";
 
-  const {current} = await initNetwork();
-  mountPicker(document.querySelector("#network"), null);
+  const NOTES = {
+    "arc-testnet": "Arc Testnet · chain 5042002 · no real funds are involved at any point",
+    "arc-mainnet": "Arc · chain 5042 · real USDC. The pilot described here runs on testnet.",
+  };
 
-  if (current) {
+  function refresh() {
+    const id = demoCounterpartyId();
     for (const a of document.querySelectorAll("[data-record-link]")) {
-      const id = a.getAttribute("data-record-link");
-      if (id) a.href = withNetwork(`/c/${id}`);
+      a.href = id ? withNetwork(`/c/${id}`) : "/";
     }
     const card = document.querySelector("[data-card-link]");
     if (card) card.href = withNetwork("/");
+    const note = document.querySelector("[data-chain-note]");
+    if (note) note.textContent = NOTES[networkKey()] ?? NOTES["arc-testnet"];
   }
+
+  await initNetwork();
+  mountPicker(document.querySelector("#network"), refresh);
+  refresh();
 </script>
 </body>
 </html>

@@ -28,15 +28,14 @@ cannot move money.
 ### One site, two chains, and a picker that says which
 
 The **chain picker** in the header switches between Arc mainnet and Arc testnet. Both
-deployments are live and both are readable from either URL — the second URL exists
-only so a link can default to the chain it means:
+deployments are live and the one URL reads both:
 
-| | Link | Defaults to |
-|---|---|---|
-| **Mainnet** | <https://horos-mainnet.kiter0211.workers.dev> | Arc, real USDC |
-| **Testnet** | <https://horos.kiter0211.workers.dev> | Arc Testnet, free, keyless |
+| | What it is |
+|---|---|
+| **Arc mainnet** | Real USDC. The ceremony below was performed on mainnet, every transaction is on the explorer, and the agent signs with a local key. |
+| **Arc testnet** | Free to use, and **keyless** — Circle holds the only key. The same contracts, the same policy, the same refusal. |
 
-The choice travels as `?network=arc-mainnet`, so a link can carry it, and the custody
+The choice travels as `?network=arc-testnet`, so a link can carry it, and the custody
 line beside the picker changes with it. That line is there because the two chains
 genuinely differ: on **testnet** the agent holds no key at all and Circle signs over
 HTTPS; on **mainnet** the agent signs with a local key, because Circle's mainnet
@@ -60,56 +59,40 @@ read, and each record link carries the network it belongs to — a page that har
 one would be wrong on the next deployment, and wrong in the way that looks like a
 broken link rather than a false claim.
 
-Read that signature again. There is no `to` parameter. The caller names *who* to
-pay, never *where*. The destination is resolved from the registry, and the only
-way an address becomes a counterparty's active account is a succession ceremony
-that the recipient cannot complete on its own.
-
-**Two live deployments, and they differ in one way that matters.**
-
-| | Link | What it is |
-|---|---|---|
-| **Mainnet** | <https://horos-mainnet.kiter0211.workers.dev> | Real USDC. The ceremony below was performed on Arc mainnet and every transaction is on the explorer. |
-| **Testnet** | <https://horos.kiter0211.workers.dev> | Free to use, and **keyless** — Circle holds the only key. |
-
 Both deployments are recorded: [`deployments/arc-mainnet.json`](deployments/arc-mainnet.json)
-and [`deployments/arc-testnet.json`](deployments/arc-testnet.json). The mainnet vault
-has since been swept back to its owner — the ceremony is on the explorer, and a
-vault with no funds simply cannot pay.
-
-On mainnet the agent signs with a local key, because Circle's mainnet access needs a
-production account this project does not have. On testnet there is no key in the
-process at all. The contracts, the policy and the refusal are identical on both; the
-custody section below states exactly which claim changes and which does not.
-
-**Try it:** <https://horos-mainnet.kiter0211.workers.dev> — paste an invoice, get the
-verdict and every reason behind it. No account, no key, and the page cannot move
-money.
+and [`deployments/arc-testnet.json`](deployments/arc-testnet.json), and the site is
+pointed at them by one command — `pnpm sync:site` writes both into a single map, so
+the page and the records cannot disagree. The mainnet vault has since been swept back
+to its owner: the ceremony is on the explorer, and a vault with no funds simply cannot
+pay.
 
 **The record it acts on:** [a counterparty that has been through the
-ceremony](https://horos-mainnet.kiter0211.workers.dev/c/0x2fe51427a51120cf806df0c0efb3931b5b97cb5ec835d6d36190dd2d8f7edda7)
-— two accounts, one of them a successor with two signatures behind it, all of it
-read from Arc. The three sample invoices on the decision card resolve to
+ceremony](https://horos.kiter0211.workers.dev/c/0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b)
+— two accounts, one of them a successor with two signatures behind it, all of it read
+from Arc. The three sample invoices on the decision card resolve to
 **RELEASE / HOLD / RELEASE** against this record.
 
-## The demo, in two and a half minutes
+## The demo, in under three minutes
 
-**[`video/horos-demo.mp4`](video/horos-demo.mp4)** — 2:36, narrated and subtitled,
-1920×1080. Seven segments: the hook, the problem, the interface rule, the live
-refusal on Arc mainnet, the public record, the chain read, and the close.
+**[`video/horos-demo.mp4`](video/horos-demo.mp4)** — 2:55, narrated and subtitled,
+1920×1080. Eight segments: the hook, the problem, the interface rule, the live refusal
+on Arc mainnet, the chain picker and the custody difference between the two
+deployments, the public record, the chain read, and the close.
 
 Every number, address and transaction in it exists in this repository or on the
 chain. Nothing is illustrated.
 
 It is **generated, not screen-recorded** — narration from edge-tts, scenes captured
-from a real browser driving the live mainnet site, assembly from ffmpeg. The script
-is [`docs/video/story.json`](docs/video/story.json), so the video can be rebuilt
-from this repository rather than re-performed, and
-[`docs/VIDEO.md`](docs/VIDEO.md) says how.
+from a real browser driving the live site, assembly from ffmpeg. The script is
+[`docs/video/story.json`](docs/video/story.json), so the video can be rebuilt from
+this repository rather than re-performed, and [`docs/VIDEO.md`](docs/VIDEO.md) says
+how.
 
-Building it found a bug the test suite could not: the mainnet site was still
-pointing at the previous deployment, so its record page rendered an empty
-counterparty. The screen recording is what caught it.
+Building it has now found two bugs the test suite could not: the mainnet site was
+still pointing at the previous deployment, so its record page rendered an empty
+counterparty; and on `/start`, switching to mainnet silently produced a link to a
+testnet record that does not exist there. Screen recording is what catches the class
+of bug where every unit is right and the page is wrong.
 
 ---
 
@@ -436,8 +419,8 @@ Circle wallet or a funded local key.
 pnpm install
 (cd contracts && forge install)
 cp .env.example .env      # add your keys, see below
-pnpm contract:test        # 35 tests
-pnpm test                 # 17 tests
+pnpm contract:test        # 57 tests
+pnpm test                 # 104 tests
 ```
 
 ### The keyless demo
@@ -451,15 +434,15 @@ Executes the full story against real Arc testnet USDC and prints a transaction
 hash for every step:
 
 ```
-01. There is no key in this process
-02. Fund the vault           ✓ approve  ✓ deposit
-03. Register a counterparty  ✓ register ✓ set a budget
-04. Pay 0.4 USDC              ✓ the address is the one on record
+01. There is no agent key in this process
+02. Fund the vault from the agent's own wallet      ✓ approve  ✓ deposit
+03. Register a counterparty                         ✓ register ✓ set a budget
+04. Pay the first invoice. The address is the one on record.
 05. An invoice arrives with an account we have never paid
       policy: HOLD — nothing has signed for it
-06. The ceremony              ✓ propose ✓ vendor attests ✓ business attests ✓ activate
-07. Pay 2.4 USDC              policy: RELEASE
-08. 2 accounts, 1 ceremony, 0 unapproved changes
+06. The vendor performs the ceremony                ✓ propose ✓ vendor ✓ business ✓ activate
+07. Pay the new account. It is on the record now.   policy: RELEASE
+08. The lineage, in public                          2 accounts, 1 ceremony, 0 unapproved changes
 ```
 
 Every transaction is signed by Circle. `pnpm check:circle` verifies the
@@ -507,20 +490,25 @@ USDC per claim, no account needed. `pnpm faucet` prints the balance.
 ```
 contracts/src/CounterpartyRegistry.sol   durable identity, public lineage, the ceremony
 contracts/src/CustodyVault.sol           holds USDC, pays counterparties, takes no address
-lib/policy.ts                             the decision, as a pure function. no model in the release path
-lib/policy.test.ts                        including the cases a model must not be able to overrule
-lib/circle.ts                             Circle wallets. the key is never in this process
-lib/screening.ts                          one input among many; fails closed unless a person waived it
-lib/invoice.ts                            extraction, and prompt-injection capture
-lib/chain.ts                              Arc config, RPC failover, 18-decimal gas / 6-decimal USDC
-scripts/demo-circle.ts                    the keyless walkthrough
-deployment.json                           what is live, committed on purpose
+lib/policy.ts                            the decision, as a pure function. no model in the release path
+lib/policy.test.ts                       104 cases, including the ones a model must not overrule
+lib/circle.ts                            Circle wallets, and the keyless path testnet signs with
+lib/invoice.ts                           extraction, and prompt-injection capture
+lib/screening.ts                         one input among many; fails closed unless a person waived it
+lib/judgment.ts                          the advisory read: calibrated, and escalate-only
+lib/watch.ts                             what the scheduled check looks for in an account's history
+worker/src/index.ts                      the site's API. reads the chain, holds no key, cannot write
+worker/public/                           the three pages: the decision card, a record, the pilot pitch
+scripts/demo.ts                          the ceremony and the refusal, end to end
+scripts/verify.ts                        reads a deployment straight from the chain, with no API
+scripts/check-ui.ts                      drives the picker and the demo button in a real browser
+deployments/<network>.json               what is live on each chain, committed on purpose
 ```
 
-`deployment.json` is committed because everything in it is public — contract
-addresses, chain id, a timestamp — and readable on the chain anyway. A judge
-should be able to see what is deployed without running anything. It is not named
-`.env` precisely so that nobody treats it as a credential and ignores it.
+`deployments/*.json` are committed because everything in them is public — contract
+addresses, a chain id, a timestamp — and readable on the chain anyway. A judge should
+be able to see what is deployed without running anything. They are not named `.env`
+precisely so that nobody treats them as credentials and ignores them.
 
 ---
 
@@ -528,31 +516,43 @@ should be able to see what is deployed without running anything. It is not named
 
 Things that are real, and things that are not.
 
-**Real, and verifiable on Arc testnet:**
+**Real, and verifiable:**
 
-- the contracts, deployed, with transaction hashes
-- the refusal: the policy holds, and the vault cannot be *given* the new address
-- the ceremony, signed by two parties, with the recipient shown it cannot self-sign
-- the payment after, and the public lineage it leaves
-- 52 tests, most of which assert that something **cannot** happen
+- the contracts, deployed on Arc **mainnet** and testnet, with transaction hashes
+- a mainnet ceremony in real USDC: a supplier's account replaced with two signatures,
+  neither of which the recipient could have supplied alone
+- the refusal, live: the policy holds, and the vault cannot be *given* the new address
+- the site, which reads either chain, holds no key, and cannot move money
+- 104 unit tests and 57 contract tests, most of which assert that something
+  **cannot** happen
 
-**Not built yet:**
+**Not built yet, or not claimed:**
 
-- a web interface. The decision logic is complete and tested; nobody has touched
-  it through a browser
-- counterparty screening. [`lib/screening.ts`](lib/screening.ts) reports
+- **traction.** No business has run an invoice through this yet. The mainnet ceremony
+  and its payments are our own, at demonstration amounts. That is the honest number,
+  and it is the one a judge should weigh.
+- **screening is unavailable.** [`lib/screening.ts`](lib/screening.ts) reports
   `unavailable` and the policy blocks on it, unless a person has explicitly waived
-  screening. A waiver can never hide an actual hit. Both behaviours are tested.
-- mainnet. Testnet only.
+  screening. A waiver can never hide an actual hit. Both behaviours are tested; the
+  signal itself is a placeholder for a real provider.
+- **the judgment layer is advisory.** It can only ever raise an escalation, never
+  authorise a release, and the release path has no model in it at all.
+- **mainnet signs with a local key**, because Circle's mainnet access needs a
+  production account this project does not have. Testnet is keyless. The trade is
+  stated above and in [`docs/MAINNET.md`](docs/MAINNET.md).
+- **the rate limiter is a brake, not a budget.** The Cloudflare binding is permissive
+  and eventually consistent by design; it was observed enforcing, and it is not
+  reliable as a spend cap. The caps that hold are on the contract.
 - cross-chain payments. CCTP is unused.
-- yield. `USYC` requires a non-US person, a $100,000 minimum and an allowlist
-  ticket, so it was left alone deliberately.
-- `Paymaster`, which does not support Arc — USDC *is* the gas token there, so
-  there is nothing to abstract.
+- yield. `USYC` requires a non-US person, a $100,000 minimum and an allowlist ticket,
+  so it was left alone deliberately.
+- `Paymaster`, which does not support Arc — USDC *is* the gas token there, so there is
+  nothing to abstract.
 
-**Untested against real money.** Every number here is testnet USDC. The logic does
-not change on mainnet; the custody assumptions do, and that has not been
-exercised.
+**Real money, small amounts.** The mainnet run moved about 1.2 USDC at demonstration
+amounts, and the vault has since been swept back to its owner. What has *not* happened
+is a business paying a supplier through this. The custody sentence that changes on
+mainnet is the one about who holds the key; the sentence about the contracts does not.
 
 ---
 

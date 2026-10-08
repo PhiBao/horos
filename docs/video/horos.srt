@@ -76,57 +76,74 @@ The policy holds it, and it names the sentence that gave the document
 away.
 
 18
-00:01:34,609 --> 00:01:39,234
-When a supplier genuinely changes accounts, that is a ceremony.
+00:01:34,609 --> 00:01:37,073
+The site reads two chains.
 
 19
-00:01:39,184 --> 00:01:42,895
-The account that was last paid agrees to be replaced.
+00:01:37,023 --> 00:01:41,424
+Mainnet runs in real USDC, signed by a local key.
 
 20
-00:01:42,895 --> 00:01:48,155
+00:01:41,424 --> 00:01:46,332
+Testnet runs the same contracts keyless - Circle holds the only key.
+
+21
+00:01:46,332 --> 00:01:52,165
+The page says which one you are reading, because that difference is a
+custody claim and not a setting.
+
+22
+00:01:52,769 --> 00:01:57,394
+When a supplier genuinely changes accounts, that is a ceremony.
+
+23
+00:01:57,344 --> 00:02:01,055
+The account that was last paid agrees to be replaced.
+
+24
+00:02:01,055 --> 00:02:06,314
 The business agrees, with a key named at registration that nobody else
 can use.
 
-21
-00:01:48,155 --> 00:01:51,801
+25
+00:02:06,314 --> 00:02:09,961
 The new account can never sign for its own arrival.
 
-22
-00:01:51,801 --> 00:01:57,179
+26
+00:02:09,961 --> 00:02:15,338
 The lineage is public, and it is not editable: every entry is a
 transaction.
 
-23
-00:01:57,789 --> 00:02:01,072
+27
+00:02:15,949 --> 00:02:19,233
 None of that requires trusting the website.
 
-24
-00:02:01,022 --> 00:02:05,840
+28
+00:02:19,182 --> 00:02:24,001
 This reads the deployment straight from the chain, with no key and no
 API.
 
-25
-00:02:05,840 --> 00:02:11,114
+29
+00:02:24,001 --> 00:02:29,274
 Two accounts, the second replacing the first, with two signatures
 behind it.
 
-26
-00:02:11,114 --> 00:02:18,118
+30
+00:02:29,274 --> 00:02:36,278
 And the interface, checked rather than asserted: pay takes a
 counterparty id, and has no address parameter.
 
-27
-00:02:18,739 --> 00:02:25,173
+31
+00:02:36,899 --> 00:02:43,333
 Horos is live on Arc mainnet, and that record was made by a real
 ceremony in real USDC.
 
-28
-00:02:25,123 --> 00:02:33,157
+32
+00:02:43,283 --> 00:02:51,317
 The repository has the contracts, an adversarial audit with every fix
 behind a test, and the same policy the deployed site runs.
 
-29
-00:02:33,157 --> 00:02:35,762
+33
+00:02:51,317 --> 00:02:53,921
 The refusal is the product.
 

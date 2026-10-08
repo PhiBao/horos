@@ -43,12 +43,34 @@ export async function initNetwork() {
 export const networkKey = () => current?.key ?? null;
 export const networkLabel = () => current?.label ?? "Arc";
 export const demoCounterpartyId = () => current?.demoCounterpartyId ?? null;
+/** Every chain this site can read, as `/api/networks` described them. */
+export const networkList = () => networks;
+/**
+ * Where to verify a transaction on the chain currently selected.
+ *
+ * Exported so no page has to carry a fallback of its own: a hardcoded explorer is a
+ * claim about which chain you are reading, and the one place that claim is written is
+ * here, from the API. Before this existed the pages fell back to the testnet explorer,
+ * so a mainnet page that failed to load its card would quietly offer to show the
+ * reader the wrong chain.
+ */
+export const networkExplorer = () => current?.explorer ?? null;
 
-/** Append the network to a path, so links are shareable and unambiguous. */
+/** Append the current network to a path, so links are shareable and unambiguous. */
 export function withNetwork(path) {
-  if (!current) return path;
+  return current ? withNetworkOf(current.key, path) : path;
+}
+
+/**
+ * The same, for a chain that is not the one selected.
+ *
+ * Used where the answer is "not here, but there": a record link that arrives while
+ * the reader's remembered chain is the other one should be able to point at the chain
+ * that actually holds it, without silently changing what they are reading.
+ */
+export function withNetworkOf(key, path) {
   const url = new URL(path, location.origin);
-  url.searchParams.set("network", current.key);
+  url.searchParams.set("network", key);
   return url.pathname + url.search;
 }
 

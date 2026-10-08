@@ -9,11 +9,9 @@
  *
  *   pnpm sync:site
  *
- * Both config files are written from the same map, because there is one Worker
- * codebase and two URLs for it: `wrangler.jsonc` defaults to testnet,
- * `wrangler.mainnet.jsonc` defaults to mainnet, and both can read either chain
- * through the picker in the interface. They differ by exactly one variable, which is
- * why this writes them in one loop rather than being told which one to fix.
+ * One config file and one site. The picker in the interface reads either chain, so
+ * a second site was only ever a second thing to forget to sync. There is one Worker
+ * deployment and one file to keep current.
  */
 
 import {existsSync, readdirSync, readFileSync, writeFileSync} from "node:fs";
@@ -29,11 +27,16 @@ type Deployment = {
   demoCounterpartyId?: string;
 };
 
-/** Which config file defaults to which chain. */
-const CONFIG_FOR: Record<string, string> = {
-  "arc-testnet": "wrangler.jsonc",
-  "arc-mainnet": "wrangler.mainnet.jsonc",
-};
+/**
+ * The one site config, and the chain a fresh visitor lands on.
+ *
+ * The default is mainnet because that is the deployment the demo video names and the
+ * one the ceremony was performed against. A judge who follows the video's link lands
+ * on the chain the video was about; the picker is one click away for anyone who wants
+ * the keyless one.
+ */
+const SITE_CONFIG = "wrangler.jsonc";
+const SITE_DEFAULT = "arc-mainnet";
 
 /** The chain ids this site knows, so a deployment cannot point it at a stranger. */
 const KNOWN_CHAINS: Record<string, number> = {
@@ -144,34 +147,45 @@ function main(): void {
   // script never hand-writes a backslash.
   const encoded = JSON.stringify(JSON.stringify(map)).slice(1, -1);
 
-  let wrote = 0;
-  for (const [network, path] of Object.entries(CONFIG_FOR)) {
-    if (!existsSync(resolve(path))) continue;
+  const path = SITE_CONFIG;
+  const before = readFileSync(resolve(path), "utf8");
 
-    const before = readFileSync(resolve(path), "utf8");
-    const watch = map[network]?.demoCounterpartyId ?? "";
-    // WATCH_IDS is the last key in the vars block, so it carries no comma.
-    const after = setLine(setLine(before, "HOROS_DEPLOYMENTS", encoded, false), "WATCH_IDS", watch, true);
+  // The cron reads whichever chain this Worker defaults to, so the watchlist holds
+  // that chain's record. Watching the other chain is a second scheduled handler, not
+  // a second guess.
+  const watch = map[SITE_DEFAULT]?.demoCounterpartyId ?? "";
 
-    const parsed = assertParses(path, after, names.length);
+  // The default chain is written too, not left to memory. This is the variable that
+  // decides what a visitor sees before they touch the picker, and the one the cron
+  // resolves - so it is a fact about the deployment, and belongs in the file this
+  // script owns. The last key in the block carries no comma.
+  const after = setLine(
+    setLine(
+      setLine(before, "HOROS_NETWORK", SITE_DEFAULT, false),
+      "HOROS_DEPLOYMENTS",
+      encoded,
+      false,
+    ),
+    "WATCH_IDS",
+    watch,
+    true,
+  );
 
-    if (after === before) {
-      console.log(`  ${path}: already current`);
-      continue;
-    }
-    writeFileSync(resolve(path), after);
-    wrote++;
-    console.log(
-      `  ${path}: ${Object.entries(parsed).map(([k, v]) => `${k} ${v.registry}`).join(", ")}`,
-    );
-  }
+  const parsed = assertParses(path, after, names.length);
 
-  if (wrote === 0) {
+  if (after === before) {
+    console.log(`  ${path}: already current`);
     console.log("  nothing to do");
     return;
   }
+  writeFileSync(resolve(path), after);
+  console.log(
+    `  ${path}: default ${SITE_DEFAULT}, ` +
+      Object.entries(parsed)
+        .map(([k, v]) => `${k} ${v.registry}`)
+        .join(", "),
+  );
   console.log(`\n  Deploy the site with:  pnpm site:deploy`);
-  if (names.includes("arc-mainnet")) console.log(`                         pnpm site:deploy:mainnet`);
 }
 
 main();

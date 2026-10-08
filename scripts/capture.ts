@@ -19,8 +19,15 @@ import {chromium} from "playwright";
 const SITE = process.env.HOROS_SITE ?? "https://horos.kiter0211.workers.dev";
 const OUT = resolve(".capture");
 
-/** The counterparty the demo seeded, with the ceremony behind it. */
-const CP = "0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d";
+/**
+ * Which chain to capture, and the counterparty the demo seeded on it.
+ *
+ * Both are asked of the site rather than written here, because both change per
+ * deployment. This used to hold a testnet id: harmless while the site defaulted to
+ * testnet, and silently a capture of a "no record" page once it did not. A screenshot
+ * tool cannot notice that its own subject has moved, so it does not get a say.
+ */
+const NETWORK = process.env.HOROS_NETWORK ?? "";
 
 async function main(): Promise<void> {
   if (!/^https:\/\//.test(SITE)) {
@@ -86,10 +93,29 @@ async function main(): Promise<void> {
     await page.setViewportSize({width: 1440, height: 900});
   };
 
-  console.log(`capturing ${SITE}`);
+  const listed = (await (await fetch(`${SITE}/api/networks`)).json()) as {
+    default: string;
+    networks: {key: string; label: string; demoCounterpartyId: string | null}[];
+  };
+  const chosen =
+    listed.networks.find((n) => n.key === (NETWORK || listed.default)) ?? listed.networks[0];
+  if (!chosen?.demoCounterpartyId) {
+    throw new Error(
+      `${SITE} offers no prefilled counterparty on ${NETWORK || listed.default} — nothing to capture.`,
+    );
+  }
+  const CP = chosen.demoCounterpartyId;
+
+  // Every URL carries the chain. Without it a capture could show one chain's page
+  // with the other chain's record pasted into it, which is the exact failure this
+  // file exists to catch rather than commit.
+  const url = (path: string) =>
+    `${SITE}${path}${path.includes("?") ? "&" : "?"}network=${encodeURIComponent(chosen.key)}`;
+
+  console.log(`capturing ${SITE} · ${chosen.label}`);
 
   // ---- the card, before anything is asked of it -----------------------------
-  await page.goto(`${SITE}/?cp=${CP}`, {waitUntil: "networkidle"});
+  await page.goto(url(`/?cp=${CP}`), {waitUntil: "networkidle"});
   await shot("01-empty", {wait: 1500});
 
   // ---- load the record ------------------------------------------------------
@@ -118,14 +144,14 @@ async function main(): Promise<void> {
   await element("el-refusal-counterparty", '[data-block="counterparty"]');
 
   // ---- the public record ----------------------------------------------------
-  await page.goto(`${SITE}/c/${CP}`, {waitUntil: "networkidle"});
+  await page.goto(url(`/c/${CP}`), {waitUntil: "networkidle"});
   await page.waitForSelector("[data-block=\"lineage\"] li", {timeout: 20_000});
   await element("el-record-facts", '[data-block="facts"]');
   await frame("07-record-lineage", '[data-block="succession"]');
   await element("el-record-lineage", '[data-block="lineage"]');
 
   // ---- the pilot page ------------------------------------------------------
-  await page.goto(`${SITE}/start`, {waitUntil: "networkidle"});
+  await page.goto(url("/start"), {waitUntil: "networkidle"});
   await shot("08-start", {wait: 900});
 
   await browser.close();

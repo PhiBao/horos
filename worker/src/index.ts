@@ -158,9 +158,15 @@ async function readCounterparty(network: NetworkProfile, deployment: Deployment,
 
   return {
     id,
-    // A counterparty nobody has paid reads as the zero id and a zero address. That
-    // is not a crash; it is the answer, and the page should say so plainly.
-    exists: id !== `0x${"0".repeat(64)}` && cp.activeAccount !== "0x",
+    // A counterparty nobody has registered reads as status None.
+    //
+    // This used to be `cp.activeAccount !== "0x"`, which was wrong in the quietest
+    // way: viem returns the zero *address* - `0x0000…0000`, forty-two characters -
+    // for a counterparty that does not exist, so it never equals `"0x"` and every id
+    // anybody typed read as existing. A judge pasting a made-up id was told it was a
+    // known counterparty with no accounts. The registry's own status is the fact;
+    // None means never registered, and that is the answer the page should print.
+    exists: cp.status !== 0,
     canonicalName: cp.canonicalName,
     statusCode: cp.status,
     status: labelStatus(cp.status),
