@@ -225,15 +225,29 @@ lineage is not a system.
 
 | Party | Key | Can do | Cannot do |
 |---|---|---|---|
-| **Agent** | none — Circle holds it | trigger payments to the recorded account, submit others' signatures | authorise anything, set budgets, stop the vault, withdraw, pay anyone but the recorded account |
+| **Agent** | none on testnet — Circle holds it. Its own local key on mainnet. | trigger payments to the recorded account, submit others' signatures | authorise anything, set budgets, stop the vault, withdraw, pay anyone but the recorded account |
 | **Business** | its own | authorise a change of destination, set budgets, stop the vault, recover funds | pay a non-active account |
 | **Vendor** | its own | authorise its own new account | sign for itself as a payer or a recipient |
 
-The agent runs on a
-[Circle developer-controlled wallet](https://developers.circle.com/wallets). The
-private key does not exist in the application at all — Circle derives it from the
-entity secret and signs over HTTPS. There is nothing in the process for a prompt
-to reach.
+**Custody depends on the network, and this is the one place the two deployments
+genuinely differ.** On **testnet** the agent runs on a
+[Circle developer-controlled wallet](https://developers.circle.com/wallets): the
+private key does not exist in the application at all, Circle derives it from the
+entity secret and signs over HTTPS, and there is nothing in the process for a prompt
+to reach. On **mainnet** the agent signs with a local key, because Circle's mainnet
+access needs a production account this project does not have — a test API key is
+refused for `ARC` with a 400, verified in the audit. Nothing else on mainnet touches
+the Circle SDK: not the deployment, not the vault, not the ceremony, and not the
+site, which reads the chain directly.
+
+So the sentence that survives on both chains is the one about the contracts, and it
+is worth being exact about which sentence changed. **A fully compromised agent
+cannot authorise a change of destination** on either chain — `pay()` takes no
+address and the payer half needs the business key. What mainnet cannot claim is
+*"there is no key in this process"*: there is one, and it is bounded by the global
+cap, the per-counterparty cap, and the executor allowlist rather than by its own
+absence. [`docs/MAINNET.md`](docs/MAINNET.md) states the trade in full, including
+what a production deployment would have to split.
 
 That matters more than usual here, because of what vault ownership *means* — and
 an earlier version of this document got it wrong. It said handing the vault to an
@@ -250,7 +264,12 @@ parties' signatures. It sets no budgets, stops nothing, withdraws nothing.
 And it is the *only* address that can trigger a payment. `pay()` checks an
 executor allowlist the owner controls; before that check existed, any stranger
 could push the vault's whole balance to the recorded counterparty one cap-sized
-payment at a time. The cap bounded each payment; nothing bounded the total. A fully
+payment at a time. The cap bounded each payment; nothing bounded the total.
+
+On mainnet the owner, the executor and the demo counterparty's business key are all
+the deploying key, because the total at risk is a few dollars. A production
+deployment splits them; the owner can `withdraw()` to any address, so that key
+belongs in custody or on a hardware wallet. A fully
 compromised agent, holding the Circle credentials that sign whatever it submits,
 still cannot send money anywhere `pay()` does not already resolve to — which is
 the recorded account and nothing else. *Now* it can only ask.

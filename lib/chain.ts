@@ -135,8 +135,31 @@ export function getLocalSigner(key: NetworkKey = currentNetwork()) {
 }
 
 function writeRpcUrl(key: NetworkKey): string {
-  const url = process.env.HOROS_RPC_URL;
-  if (url) return url;
+  // Each network has its own variable, so a mainnet deploy cannot quietly borrow a
+  // testnet endpoint because HOROS_RPC_URL happened to be set from the last run.
+  const perNetwork =
+    key === "arc-mainnet" ? process.env.HOROS_RPC_URL_MAINNET : process.env.HOROS_RPC_URL_TESTNET;
+  const url = perNetwork ?? process.env.HOROS_RPC_URL;
+  if (url) {
+    // The names are in the endpoints, so this costs nothing and catches the one
+    // mistake that is expensive rather than merely embarrassing: deploying mainnet
+    // contracts to a testnet because a variable was inherited.
+    const saysTestnet = /testnet/i.test(url);
+    const saysMainnet = /mainnet/i.test(url);
+    if (key === "arc-mainnet" && saysTestnet) {
+      throw new Error(
+        `Refusing to write to ${key}: the writable RPC URL mentions testnet (${url.replace(/\/\/[^/]*/, "//…")}).\n` +
+          `  Set HOROS_RPC_URL_MAINNET to a mainnet endpoint.`,
+      );
+    }
+    if (key === "arc-testnet" && saysMainnet) {
+      throw new Error(
+        `Refusing to write to ${key}: the writable RPC URL mentions mainnet (${url.replace(/\/\/[^/]*/, "//…")}).\n` +
+          `  Set HOROS_RPC_URL_TESTNET to a testnet endpoint.`,
+      );
+    }
+    return url;
+  }
   throw new Error(
     `No writable RPC configured. Arc's public RPCs reject eth_sendTransaction.\n` +
       `Either set HOROS_RPC_URL (testnet node, or http://127.0.0.1:8545 for anvil), or\n` +

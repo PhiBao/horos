@@ -510,7 +510,13 @@ const usdc = (n: number): bigint => BigInt(Math.floor(n * 10 ** 6));
  */
 const PAY_FIRST = usdc(Number(process.env.HOROS_DEMO_PAY_FIRST ?? 0.4));
 const PAY_SECOND = usdc(Number(process.env.HOROS_DEMO_PAY_SECOND ?? 2.4));
-const COUNTERPARTY_CAP = usdc(10); // what we allow this vendor per payment
+/**
+ * What this vendor may be paid in one payment.
+ *
+ * Overridable because the right number depends on the chain: ten USDC is a sensible
+ * testnet budget and an absurd one for a first mainnet run.
+ */
+const COUNTERPARTY_CAP = usdc(Number(process.env.HOROS_DEMO_CAP ?? 10));
 
 /**
  * A stable reference for a payment, so the same invoice can never be paid twice.

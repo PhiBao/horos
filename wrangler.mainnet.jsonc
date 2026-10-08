@@ -1,0 +1,113 @@
+{
+  // The MAINNET deployment of Horos's public site. A second Worker, so both chains
+  // stay live at once: testnet for a demo anyone can try without spending anything,
+  // mainnet for the record that cost real USDC.
+  //
+  // Read this file and wrangler.jsonc together; they differ only in name, network,
+  // and the deployment addresses. `pnpm sync:site:mainnet` fills the addresses in
+  // from deployments/arc-mainnet.json after a mainnet deploy.
+  //
+  // Custody differs between the two, and the README says so plainly: on testnet the
+  // agent holds no key (Circle signs), on mainnet it holds one. That is a
+  // deliberate, documented trade, not an oversight.
+  //
+  // Two properties worth stating, because they are the argument rather than a
+  // detail:
+  //
+  //   1. No write function is reachable. The site reads Arc over public RPCs, which
+  //      reject eth_sendTransaction, and it holds no key. There is no code path from
+  //      this Worker to moving money.
+  //   2. It imports lib/policy.ts from the repository. The deployed site and the
+  //      test suite run the same decision code, so they cannot disagree about what
+  //      would happen.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "horos-mainnet",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+
+  "assets": {
+    "directory": "./worker/public",
+    "binding": "ASSETS",
+    // The Worker handles the API and the counterparty page itself; everything else
+    // is a static file. Without this the asset router would answer /api/decision
+    // with a 404 page from public/, which is a confusing way to learn that a route
+    // is misspelled.
+    "run_worker_first": ["/api/*", "/c/*", "/healthz"]
+  },
+
+  "vars": {
+    // The chain this site reads. One variable, and everything downstream derives
+    // from it: RPC endpoints, the explorer behind every "view on chain" link, and
+    // the chain label the API reports. An unknown value fails loudly rather than
+    // falling back, because a site that reads testnet while its config says mainnet
+    // shows numbers that look real and are not.
+    //
+    //   "arc-testnet" | "arc-mainnet"
+    "HOROS_NETWORK": "arc-mainnet",
+
+    // The live testnet deployment, from deployment.json.
+    "REGISTRY_ADDRESS": "0x0000000000000000000000000000000000000000",
+    "VAULT_ADDRESS": "0x0000000000000000000000000000000000000000",
+
+    // Counterparties the scheduled check looks at, comma-separated. Empty means
+    // the loop runs and reports that it watches nothing — a cron that silently
+    // watches an empty list is how supervision evaporates, so the emptiness is
+    // reported rather than assumed.
+    "WATCH_IDS": ""
+  },
+
+  // The decision endpoint spends money per request (chain reads plus a paid judgment
+  // call), so it is limited per client IP through the platform binding. An
+  // in-isolate counter would be per-isolate and would look like a control without
+  // being one.
+  "ratelimits": [
+    {
+      // Emergency brake on the endpoint. Generous, because the thing that must not
+      // break is a person clicking through the three samples.
+      "name": "DECISION_LIMITER",
+      "namespace_id": "1001",
+      "simple": {"limit": 60, "period": 60}
+    },
+    {
+      // Gates the paid call rather than the endpoint: a caller who trips it still
+      // gets a verdict, decided from onchain history alone, with the card saying
+      // why. Permissive by design — see the note in worker/src/index.ts.
+      "name": "JUDGMENT_LIMITER",
+      "namespace_id": "1002",
+      "simple": {"limit": 10, "period": 60}
+    }
+  ],
+
+  // Every twenty minutes. Often enough that a half-signed ceremony is noticed the
+  // same day, seldom enough that a handful of public-RPC reads barely register.
+  "triggers": {
+    "crons": ["*/20 * * * *"]
+  },
+
+  // No API key is in this file, and none can be. The judgment key is a Worker secret:
+  //
+  //   pnpm site:secret        (reads the value from your shell, never from a file)
+  //
+  // It is bound in worker/src/index.ts under a name that does not appear anywhere in
+  // this file, on purpose. Wrangler reads the repository's dotenv file and injects
+  // its contents, and Cloudflare rejects a name that is both a var and a secret - so
+  // the two are kept apart by name rather than by hoping.
+  //
+  // Two footguns worth stating, both found the hard way:
+  //
+  //   1. Wrangler's JSONC parser does not strip comments before scanning for bindings.
+  //      Writing an upper-snake identifier in a comment here creates that binding. The
+  //      paragraph above was originally written with the real name in it and the deploy
+  //      grew an empty var of that name, which then blocked the secret of the same name
+  //      from ever being set. Keep env-var names out of these comments.
+  //   2. --keep-vars defaults to false, so a var removed from this file is also removed
+  //      from the deployment. That is the behaviour you want; it just means a rename
+  //      here is a deployment change rather than a cosmetic edit.
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

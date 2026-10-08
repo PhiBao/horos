@@ -15,7 +15,7 @@
  * comments away.
  */
 
-import {readFileSync, writeFileSync} from "node:fs";
+import {existsSync, readFileSync, writeFileSync} from "node:fs";
 import {resolve} from "node:path";
 
 type Deployment = {
@@ -32,8 +32,37 @@ const KNOWN_CHAINS: Record<string, number> = {
   "arc-mainnet": 5042,
 };
 
+/**
+ * Which config file belongs to which network.
+ *
+ * Two Workers, two configs, one source of truth each. The alternative — one file
+ * edited back and forth — is how a site ends up reading mainnet contracts through a
+ * testnet explorer, which renders as broken links rather than as a wrong claim.
+ */
+const CONFIG_FOR: Record<string, string> = {
+  "arc-testnet": "wrangler.jsonc",
+  "arc-mainnet": "wrangler.mainnet.jsonc",
+};
+
 function main(): void {
-  const deployment = JSON.parse(readFileSync(resolve("deployment.json"), "utf8")) as Deployment;
+  const wanted = process.argv[2];
+  const path = wanted ? CONFIG_FOR[wanted] : "wrangler.jsonc";
+  if (wanted && !path) {
+    throw new Error(
+      `No config file is mapped to "${wanted}". Known: ${Object.keys(CONFIG_FOR).join(", ")}.`,
+    );
+  }
+  if (!existsSync(resolve(path)) && wanted) {
+    throw new Error(
+      `${path} does not exist yet. The mainnet config is created once, by hand, ` +
+        `with the same variable names as wrangler.jsonc and HOROS_NETWORK=arc-mainnet.`,
+    );
+  }
+  const source = wanted ? resolve("deployments", `${wanted}.json`) : resolve("deployment.json");
+  if (!existsSync(source)) {
+    throw new Error(`${source} does not exist — deploy to ${wanted ?? "the current network"} first.`);
+  }
+  const deployment = JSON.parse(readFileSync(source, "utf8")) as Deployment;
 
   const addr = /^0x[0-9a-fA-F]{40}$/;
   if (!addr.test(deployment.registry) || !addr.test(deployment.vault)) {
@@ -43,8 +72,7 @@ function main(): void {
     );
   }
 
-  const path = resolve("wrangler.jsonc");
-  const before = readFileSync(path, "utf8");
+  const before = readFileSync(resolve(path), "utf8");
 
   // The network travels with the addresses. Pointing the site at mainnet contracts
   // while its own configuration still says testnet is the failure this prevents:
@@ -70,13 +98,13 @@ function main(): void {
     .replace(/("VAULT_ADDRESS":\s*")[^"]*(")/, `$1${deployment.vault}$2`);
 
   if (after === before) {
-    console.log(`wrangler.jsonc already points at ${deployment.network} (registry ${deployment.registry})`);
+    console.log(`${path} already points at ${deployment.network} (registry ${deployment.registry})`);
     return;
   }
 
-  writeFileSync(path, after);
+  writeFileSync(resolve(path), after);
   console.log(
-    `wrangler.jsonc now points at ${deployment.network} (chain ${deployment.chainId}):\n` +
+    `${path} now points at ${deployment.network} (chain ${deployment.chainId}):\n` +
       `  registry  ${deployment.registry}\n` +
       `  vault     ${deployment.vault}\n` +
       `  deployed  ${deployment.deployedAt}\n\n` +

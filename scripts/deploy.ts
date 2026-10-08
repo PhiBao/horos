@@ -9,7 +9,7 @@
  * .env.local, replacing only the pointers it owns.
  */
 
-import {writeFileSync, existsSync, readFileSync} from "node:fs";
+import {writeFileSync, existsSync, readFileSync, mkdirSync} from "node:fs";
 import {privateKeyToAccount} from "viem/accounts";
 import {resolve} from "node:path";
 import {getLocalSigner, getPublicClient, getChain, currentNetwork, formatUsdc, USDC_ADDRESS} from "../lib/chain";
@@ -72,7 +72,29 @@ async function deploy() {
   const registry = registryReceipt.contractAddress!;
   console.log(`  CounterpartyRegistry  ${registry}`);
 
-  const globalCap = 500_000n * 10n ** 6n;
+  /**
+   * The ceiling on any single payment, for the whole vault.
+   *
+   * Half a million USDC is a testnet number, and a mainnet deployment that inherits
+   * it by accident has a $500,000 ceiling on a demonstration vault. So on mainnet it
+   * has to be said out loud: no default, no fallback, no "it was in the env
+   * somewhere". A cap that nobody chose is not a control.
+   */
+  const statedCap = process.env.HOROS_GLOBAL_CAP;
+  if (network === "arc-mainnet" && !statedCap) {
+    throw new Error(
+      "Refusing to deploy to mainnet without HOROS_GLOBAL_CAP.\n" +
+        "  The testnet default is 500000 USDC — a ceiling nobody would choose on a\n" +
+        "  chain where it is real money. Set it to what you are willing to lose,\n" +
+        "  for example:  HOROS_GLOBAL_CAP=5",
+    );
+  }
+  const globalCapUsdc = Number(statedCap ?? 500_000);
+  if (!Number.isFinite(globalCapUsdc) || globalCapUsdc <= 0) {
+    throw new Error(`HOROS_GLOBAL_CAP must be a positive number of USDC, got "${statedCap}"`);
+  }
+  const globalCap = BigInt(Math.floor(globalCapUsdc * 10 ** 6));
+  console.log(`  global cap            ${globalCapUsdc} USDC per payment`);
   const vaultHash = await wallet.deployContract({
     chain,
     abi: vaultAbi,
@@ -97,13 +119,27 @@ async function deploy() {
   // whose owner is a config value away from the agent wallet is a vault whose owner
   // is the agent wallet.)
   console.log(`  vault owner    ${account.address}  (the deploying key — hold it like money)`);
+  if (network === "arc-mainnet") {
+    console.log(
+      `\n  ⚠ mainnet: this key is the owner, the executor, and the business for the demo\n` +
+        `    counterparty, because the total at risk is ${globalCapUsdc} USDC and splitting the\n` +
+        `    roles would need custody this deployment does not have. See docs/MAINNET.md.`,
+    );
+  }
 
   // Only a named executor (or the owner) may trigger a payment. The agent wallet is
   // the executor; without this the vault would let any stranger spend it in
   // cap-sized pieces. HOROS_EXECUTOR overrides, for a split deployment.
+  // On testnet the executor is the Circle agent wallet, because Circle is the only
+  // signer there. On mainnet there is no Circle signing (a test key cannot address a
+  // mainnet wallet), so the executor is the deploying key. Reading
+  // CIRCLE_WALLET_ADDRESS on mainnet would name a wallet that cannot transact on the
+  // chain and quietly make payments untriggerable.
   const executor =
     (process.env.HOROS_EXECUTOR as `0x${string}` | undefined) ??
-    (process.env.CIRCLE_WALLET_ADDRESS as `0x${string}` | undefined) ??
+    (network === "arc-testnet"
+      ? (process.env.CIRCLE_WALLET_ADDRESS as `0x${string}` | undefined)
+      : undefined) ??
     account.address;
   {
     const execHash = await wallet.writeContract({
@@ -163,7 +199,10 @@ async function deploy() {
   writeFileSync(resolve(process.cwd(), ".env.deployed"), out + "\n");
   appendToEnvLocal(out);
 
-  console.log(`\n  wrote deployment.json (public, committed) and .env.local (private, ignored)\n`);
+  console.log(
+    `\n  wrote deployments/${network}.json (per network), deployment.json (the latest),\n` +
+      `  and .env.local (private, ignored)\n`,
+  );
   return deployment;
 }
 

@@ -24,7 +24,7 @@
     "demo:circle": "tsx scripts/demo-circle.ts",
     "site:dev": "wrangler dev --port 8787 --ip 127.0.0.1",
     "site:deploy": "wrangler deploy --env-file worker/empty.env",
-    "site:types": "wrangler types --env-file worker/empty.env",
+    "site:types": "wrangler types --env-file worker/empty.env --strict-vars false",
     "site:secret": "wrangler secret put JUDGMENT_API_KEY",
     "sync:site": "tsx scripts/sync-worker-config.ts",
     "abi:read": "tsx scripts/gen-read-abi.ts",
@@ -33,7 +33,11 @@
     "check:pages": "tsx scripts/check-pages.ts",
     "verify": "tsx scripts/verify.ts",
     "capture": "tsx scripts/capture.ts",
-    "video": "tsx scripts/video.ts"
+    "video": "tsx scripts/video.ts",
+    "sync:site:mainnet": "tsx scripts/sync-worker-config.ts arc-mainnet",
+    "site:deploy:mainnet": "wrangler deploy --config wrangler.mainnet.jsonc --env-file worker/empty.env",
+    "site:dev:mainnet": "wrangler dev --config wrangler.mainnet.jsonc --port 8788 --ip 127.0.0.1",
+    "deploy:mainnet": "HOROS_NETWORK=arc-mainnet tsx scripts/deploy.ts"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^4.6.0",
