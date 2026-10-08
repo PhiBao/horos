@@ -17,6 +17,11 @@
   <div class="wrap">
     <a class="brand" href="/">Horos</a>
     <p class="tagline">A change of payment address is a succession ceremony, not a field update.</p>
+    <div class="picker">
+      <label for="network">Chain</label>
+      <select id="network" hidden></select>
+      <span class="custody" data-custody></span>
+    </div>
   </div>
 </header>
 
@@ -50,7 +55,13 @@
     </div>
 
     <div class="samples">
-      <span>Start from one of these:</span>
+      <button type="button" id="verified" class="primary-ghost">Load our verified record</button>
+      <span class="hint-inline">fills this in with the counterparty this deployment actually paid
+      &mdash; then press Decide</span>
+    </div>
+
+    <div class="samples">
+      <span>Or start from one of these:</span>
       <button type="button" class="ghost" data-sample="ordinary">a routine invoice</button>
       <button type="button" class="ghost" data-sample="attack">the redirected one</button>
       <button type="button" class="ghost" data-sample="afterMove">the next one, after the ceremony</button>

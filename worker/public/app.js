@@ -15,6 +15,8 @@
  * one that always shows its work lets them disagree with it.
  */
 
+import {initNetwork, mountPicker, networkKey, withNetwork, demoCounterpartyId} from "./network.js";
+
 const $ = (s) => document.querySelector(s);
 
 const esc = (s) =>
@@ -342,14 +344,15 @@ async function loadRecord(id) {
     return;
   }
   try {
-    const res = await fetch(`/api/counterparty/${encodeURIComponent(id)}`);
+    const res = await fetch(withNetwork(`/api/counterparty/${encodeURIComponent(id)}`));
     record = await res.json();
     if (!res.ok) throw new Error(record.error || `registry read failed (${res.status})`);
     const cp = record.counterparty;
     hint.className = "hint";
+    const recordLink = `<a href="${esc(withNetwork(`/c/${id}`))}">public record</a>`;
     hint.innerHTML = cp.exists
-      ? `Known: <strong>${esc(cp.displayName || cp.canonicalName)}</strong> — paid at ${cp.accountCount} account${cp.accountCount === 1 ? "" : "s"}, currently <span class="mono">${esc(short(cp.activeAccount))}</span>. <a href="/c/${esc(id)}">public record</a>`
-      : `No record. Nothing has ever been paid to this counterparty, so there is no history to check the invoice against. <a href="/c/${esc(id)}">Open the empty record</a>`;
+      ? `Known: <strong>${esc(cp.displayName || cp.canonicalName)}</strong> — paid at ${cp.accountCount} account${cp.accountCount === 1 ? "" : "s"}, currently <span class="mono">${esc(short(cp.activeAccount))}</span>. ${recordLink}`
+      : `No record on <strong>${esc(record?.chain?.name ?? "this chain")}</strong>. Nothing has ever been paid to this counterparty here, so there is no history to check the invoice against. ${recordLink}`;
   } catch (err) {
     hint.className = "hint err";
     hint.textContent = err.message;
@@ -365,7 +368,47 @@ function applySample(kind) {
   $("#result").hidden = true;
 }
 
-function main() {
+/**
+ * Fill the form with this deployment's own paid counterparty.
+ *
+ * `demoCounterpartyId` comes from the API, not from this file, because the id is
+ * derived from the registry address and therefore differs on every deployment. When
+ * there is none — a fresh deployment the demo has not run against — the button says
+ * so instead of filling in a guess.
+ */
+async function loadVerified() {
+  const status = $("#status");
+  const id = demoCounterpartyId();
+  if (!id) {
+    status.className = "hint err";
+    status.textContent =
+      "This deployment has no verified counterparty recorded yet. Run the demo against it, then re-sync the site.";
+    return;
+  }
+  $("#cp").value = id;
+  await loadRecord(id);
+  // The redirected invoice, because that is the one worth watching: it is the
+  // document this whole product exists to refuse.
+  applySample("attack");
+  status.className = "hint";
+  status.textContent = "Loaded. Press Decide.";
+  $("#go").focus();
+}
+
+async function main() {
+  const {current} = await initNetwork();
+  mountPicker($("#network"), async () => {
+    // Changing chain changes which counterparty is verifiable, so the field must not
+    // keep an id that belongs to the other one.
+    $("#cp").value = "";
+    $("#result").hidden = true;
+    const hint = $("#cp-hint");
+    hint.className = "hint";
+    hint.textContent = "Switched chain. The counterparty id differs per deployment — press Load our verified record.";
+    void current;
+  });
+
+  $("#verified").addEventListener("click", loadVerified);
   $("#find").addEventListener("click", () => loadRecord($("#cp").value.trim()));
 
   for (const b of document.querySelectorAll("[data-sample]")) {
@@ -393,10 +436,10 @@ function main() {
     status.textContent = "Reading the document and the registry…";
     $("#go").disabled = true;
     try {
-      const res = await fetch("/api/decision", {
+      const res = await fetch(withNetwork("/api/decision"), {
         method: "POST",
         headers: {"content-type": "application/json"},
-        body: JSON.stringify({counterpartyId: id, invoiceText}),
+        body: JSON.stringify({counterpartyId: id, invoiceText, network: networkKey()}),
       });
       const card = await res.json();
       if (!res.ok) throw new Error(card.error || `the decision failed (${res.status})`);

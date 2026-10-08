@@ -37,7 +37,8 @@
     "site:deploy:mainnet": "wrangler deploy --config wrangler.mainnet.jsonc --env-file worker/empty.env",
     "site:dev:mainnet": "wrangler dev --config wrangler.mainnet.jsonc --port 8788 --ip 127.0.0.1",
     "deploy:mainnet": "HOROS_NETWORK=arc-mainnet tsx scripts/deploy.ts",
-    "sweep": "tsx scripts/sweep.ts"
+    "sweep": "tsx scripts/sweep.ts",
+    "check:ui": "tsx scripts/check-ui.ts"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^4.6.0",

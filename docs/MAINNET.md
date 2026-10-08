@@ -92,15 +92,31 @@ on mainnet — a test API key is refused for `ARC` with a 400, which is verified
 
 ## Which network is which
 
-One variable decides, and everything else derives from it:
+Both chains are readable from either URL. The chain picker in the header switches
+between them, the choice travels as `?network=`, and the custody line beside the
+picker changes with it. The two Worker URLs exist only so that a link can default to
+the chain it means:
 
 | | Testnet | Mainnet |
 |---|---|---|
-| `HOROS_NETWORK` | `arc-testnet` | `arc-mainnet` |
+| Default chain | `arc-testnet` | `arc-mainnet` |
 | Worker | `horos` | `horos-mainnet` |
 | Config | `wrangler.jsonc` | `wrangler.mainnet.jsonc` |
 | Addresses | `deployments/arc-testnet.json` | `deployments/arc-mainnet.json` |
 | Writable RPC | `HOROS_RPC_URL_TESTNET` | `HOROS_RPC_URL_MAINNET` |
+
+The two config files are written by one command, `pnpm sync:site`, and differ by
+exactly one variable — the default chain. Everything else is derived from
+`HOROS_DEPLOYMENTS`, a single JSON map written from `deployments/*.json`. Writing one
+network at a time is how the two configs drifted apart in the first place: the site
+was once pointed at a stale deployment for hours because a second deploy was never
+followed by a second sync, and only the screen recording caught it.
+
+`GET /api/networks` publishes the map to the interface, which is why the picker needs
+no hardcoded list and the "Load our verified record" button can point at each chain's
+own counterparty. The id is `keccak(name, first account, registry)` and changes on
+every deploy, so the demo records its id into `deployments/<network>.json` when it
+runs and the site reads it from there.
 
 A deploy to the wrong chain is refused rather than performed: if the network is
 mainnet and the writable RPC URL mentions testnet (or the reverse), the write path

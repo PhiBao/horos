@@ -4,5 +4,6 @@
   "chainId": 5042,
   "network": "arc-mainnet",
   "deployedAt": "2026-10-08T13:31:40.244Z",
-  "deployer": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67"
+  "deployer": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
+  "demoCounterpartyId": "0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b"
 }

@@ -36,7 +36,7 @@ header {
   padding: 18px 0;
   background: linear-gradient(180deg, #0e1117, var(--bg));
 }
-header .wrap { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+header .wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .brand { color: var(--text); font-weight: 700; letter-spacing: .02em; text-decoration: none; font-size: 18px; }
 .tagline { color: var(--dimmer); margin: 0; font-size: 13.5px; }
 
@@ -53,6 +53,16 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 .strong { font-weight: 600; }
 .none { color: var(--dimmer); font-style: italic; }
 .sub { color: var(--dim); font-size: 13.5px; }
+
+/* ---- the chain picker ---- */
+.picker { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+.picker label { color: var(--dimmer); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.picker select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 6px 10px; font-size: 13px; font-family: inherit;
+}
+.picker select:focus { outline: 2px solid #2d5c8f; outline-offset: -1px; }
+.custody { color: var(--dimmer); font-size: 12px; font-family: var(--mono); }
 
 /* ---- the lede ---- */
 .lede { max-width: 68ch; margin-bottom: 28px; }
@@ -80,6 +90,9 @@ button:hover { background: #2ea043; }
 button:disabled { opacity: .55; cursor: default; }
 button.ghost { background: transparent; border-color: var(--line); color: var(--dim); font-weight: 500; }
 button.ghost:hover { background: var(--panel-2); color: var(--text); }
+button.primary-ghost { border-color: #2ea04366; color: #7ee2a8; }
+button.primary-ghost:hover { background: #2ea04318; color: #a7f3c4; }
+.hint-inline { color: var(--dimmer); font-size: 12.5px; }
 
 #go { margin-top: 16px; }
 

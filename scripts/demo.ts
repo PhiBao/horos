@@ -9,6 +9,8 @@
  */
 
 import {loadEnv} from "../lib/env.js";
+import {existsSync, readFileSync, writeFileSync} from "node:fs";
+import {resolve} from "node:path";
 import {keccak256, toHex} from "viem";
 import {VENDOR_KEY, VENDOR_NEW_KEY, ATTACKER_KEY} from "../lib/demo-keys.js";
 import {privateKeyToAccount} from "viem/accounts";
@@ -246,6 +248,25 @@ async function main() {
     args: [cpId],
   })) as number;
   note(`counterparty  ${cpId.slice(0, 18)}…  status ${["None", "Clean", "Broken"][cpState]}`);
+
+  // Record which counterparty this deployment's demo uses, so the site's "verified
+  // record" button can point at it without anyone re-deriving the id. The id is
+  // keccak(name, first account, registry) and changes on every deploy, so a page
+  // holding one hardcoded is subtly wrong on every deployment but its own.
+  try {
+    const path = resolve("deployments", `${dep.network}.json`);
+    if (existsSync(path)) {
+      const record = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+      if (record.demoCounterpartyId !== cpId) {
+        record.demoCounterpartyId = cpId;
+        writeFileSync(path, JSON.stringify(record, null, 2) + "\n");
+        note("recorded as this deployment's demo counterparty");
+      }
+    }
+  } catch {
+    // A missing record is not a reason to fail a working demo; the site simply will
+    // not offer a prefilled record for this chain.
+  }
 
   // If a previous run already performed a ceremony, put the lineage back where
   // this run's story needs it, so the demo always shows the same sequence.

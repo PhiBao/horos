@@ -10,6 +10,8 @@
  *
  * Read-only, like everything else on this site.
  */
+import {initNetwork, mountPicker, withNetwork, demoCounterpartyId, networkKey} from "./network.js";
+
 const $ = (sel) => document.querySelector(sel);
 
 /** Set from the API response: the page describes a chain it does not choose. */
@@ -33,6 +35,7 @@ function render(data) {
   el.hidden = false;
 
   if (!cp.exists) {
+    const demo = demoCounterpartyId();
     el.innerHTML = `
       <h1 class="verdict hold">No record</h1>
       <p class="headline">Nobody has ever paid this counterparty, so there is nothing to show and nothing on file to verify against.</p>
@@ -41,7 +44,13 @@ function render(data) {
       been made yet, or that somebody typed the id wrong. In both cases the useful thing to say is
       that there is no history — not that the record is empty.</p>
       <p class="mono">${esc(cp.id)}</p>
-      <p><a href="/">Back to the decision card</a></p>`;
+      ${
+        demo
+          ? `<p><a href="${esc(withNetwork(`/c/${demo}`))}">This chain's verified record &rarr;</a>
+             <span class="none">— a counterparty this deployment has actually paid</span></p>`
+          : ""
+      }
+      <p><a href="${esc(withNetwork("/"))}">Back to the decision card</a></p>`;
     return;
   }
 
@@ -149,6 +158,17 @@ activeAccount(${esc(cp.id)}) → ${esc(cp.activeAccount)}</pre>
 }
 
 async function main() {
+  await initNetwork();
+  mountPicker($("#network"), async () => {
+    // Same id, other chain. It may not exist there, and "no record" is the honest
+    // answer — the page offers that chain's own verified record underneath.
+    await load();
+  });
+
+  await load();
+}
+
+async function load() {
   const id = idFromPath();
   const el = $("#record");
 
@@ -167,7 +187,7 @@ async function main() {
       <p><a href="/">Back to the decision card</a></p>`;
     $("#lookup-go").addEventListener("click", () => {
       const v = $("#lookup-id").value.trim();
-      if (/^0x[0-9a-fA-F]{64}$/.test(v)) location.href = `/c/${v.toLowerCase()}`;
+      if (/^0x[0-9a-fA-F]{64}$/.test(v)) location.href = withNetwork(`/c/${v.toLowerCase()}`);
       else el.querySelector(".lookup").insertAdjacentHTML("beforebegin", `<p class="err">That is not a counterparty id: it must be 0x followed by 64 hex characters.</p>`);
     });
     return;
@@ -177,7 +197,7 @@ async function main() {
   el.innerHTML = `<p class="hint">Reading the registry…</p>`;
 
   try {
-    const res = await fetch(`/api/counterparty/${encodeURIComponent(id)}`);
+    const res = await fetch(withNetwork(`/api/counterparty/${encodeURIComponent(id)}`));
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `the registry read failed (${res.status})`);
     render(data);

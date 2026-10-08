@@ -47,14 +47,16 @@
     //   "arc-testnet" | "arc-mainnet"
     "HOROS_NETWORK": "arc-mainnet",
 
-    // The live testnet deployment, from deployment.json.
-    "REGISTRY_ADDRESS": "0x570855732f47b24ef6f9a42024e05c9ca0c7f63c",
-    "VAULT_ADDRESS": "0x1879a1bc80fdc97375abc7476152c3956fd48e5f",
+    // Both deployments, keyed by chain. Written by `pnpm sync:site` from
+    // deployments/*.json, so the site and the deployment records cannot disagree.
+    // The picker in the interface is built from this, and the demo button takes
+    // each chain's record from it.
+    "HOROS_DEPLOYMENTS": "{\"arc-mainnet\":{\"registry\":\"0x570855732f47b24ef6f9a42024e05c9ca0c7f63c\",\"vault\":\"0x1879a1bc80fdc97375abc7476152c3956fd48e5f\",\"demoCounterpartyId\":\"0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b\"},\"arc-testnet\":{\"registry\":\"0x9ea65e1f6a5ca0c55d6e3db18dfed54ded8fe5d1\",\"vault\":\"0xa5f226770f71a933201c1aa288e314a4825b31ed\",\"demoCounterpartyId\":\"0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d\"}}",
 
-    // Counterparties the scheduled check looks at, comma-separated. Empty means
-    // the loop runs and reports that it watches nothing — a cron that silently
-    // watches an empty list is how supervision evaporates, so the emptiness is
-    // reported rather than assumed.
+    // Counterparties the scheduled check looks at, comma-separated. Empty means the
+    // loop runs and reports that it watches nothing — a cron that silently watches
+    // an empty list is how supervision evaporates, so the emptiness is reported
+    // rather than assumed.
     "WATCH_IDS": "0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b"
   },
 

@@ -20,6 +20,51 @@ pay, never *where*. The destination is resolved from the registry, and the only
 way an address becomes a counterparty's active account is a succession ceremony
 that the recipient cannot complete on its own.
 
+**Try it:** <https://horos.kiter0211.workers.dev> — press **Load our verified record**,
+then **Decide**. That fills the form with the counterparty this deployment has
+actually paid, and the document it will refuse. No account, no key, and the page
+cannot move money.
+
+### One site, two chains, and a picker that says which
+
+The **chain picker** in the header switches between Arc mainnet and Arc testnet. Both
+deployments are live and both are readable from either URL — the second URL exists
+only so a link can default to the chain it means:
+
+| | Link | Defaults to |
+|---|---|---|
+| **Mainnet** | <https://horos-mainnet.kiter0211.workers.dev> | Arc, real USDC |
+| **Testnet** | <https://horos.kiter0211.workers.dev> | Arc Testnet, free, keyless |
+
+The choice travels as `?network=arc-mainnet`, so a link can carry it, and the custody
+line beside the picker changes with it. That line is there because the two chains
+genuinely differ: on **testnet** the agent holds no key at all and Circle signs over
+HTTPS; on **mainnet** the agent signs with a local key, because Circle's mainnet
+access needs a production account this project does not have — a test API key is
+refused for `ARC` with a 400, verified in the audit.
+
+Nothing else on mainnet touches the Circle SDK: not the deployment, not the vault,
+not the ceremony, and not the site, which reads the chain directly.
+
+So the sentence that survives on both chains is the one about the contracts, and it
+is worth being exact about which sentence changed. **A fully compromised agent
+cannot authorise a change of destination** on either chain — `pay()` takes no
+address and the payer half needs the business key. What mainnet cannot claim is
+*"there is no key in this process"*: there is one, and it is bounded by the global
+cap, the per-counterparty cap, and the executor allowlist rather than by its own
+absence. [`docs/MAINNET.md`](docs/MAINNET.md) states the trade in full, including
+what a production deployment would have to split.
+
+Every claim on the page names its chain. The decision card reports which network it
+read, and each record link carries the network it belongs to — a page that hardcoded
+one would be wrong on the next deployment, and wrong in the way that looks like a
+broken link rather than a false claim.
+
+Read that signature again. There is no `to` parameter. The caller names *who* to
+pay, never *where*. The destination is resolved from the registry, and the only
+way an address becomes a counterparty's active account is a succession ceremony
+that the recipient cannot complete on its own.
+
 **Two live deployments, and they differ in one way that matters.**
 
 | | Link | What it is |

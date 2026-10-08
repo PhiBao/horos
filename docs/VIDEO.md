@@ -51,6 +51,13 @@ Worth recording, because it is the argument for having a gate at all:
 
 ## Notes
 
+- **The video predates the chain picker.** It was recorded against the mainnet URL
+  while that deployment read one chain; the picker and the "Load our verified record"
+  button landed afterwards and are not in it. Nothing in the video contradicts them —
+  the URL it shows still works and still defaults to mainnet — but the video does not
+  show the newer controls. `story.json` here matches the video as uploaded; the
+  template's copy has the picker version if a re-record is ever wanted.
+
 - The narration is **generated**, so it can be re-voiced by changing `story.json`
   and re-running. There is no recorded human audio to keep in sync.
 - The video was **not** rebuilt when the mainnet vault was swept. The ceremony it

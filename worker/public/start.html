@@ -17,6 +17,11 @@
   <div class="wrap">
     <a class="brand" href="/">Horos</a>
     <p class="tagline">A pilot, not a product launch.</p>
+    <div class="picker">
+      <label for="network">Chain</label>
+      <select id="network" hidden></select>
+      <span class="custody" data-custody></span>
+    </div>
   </div>
 </header>
 
@@ -89,11 +94,11 @@
     <h3>See it before you decide</h3>
     <p class="sub">Neither of these needs an account.</p>
     <p>
-      <a href="/?cp=0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d">The decision
+      <a href="/" data-card-link>The decision
       card</a>, with three sample invoices that resolve to release, refuse, refuse.
     </p>
     <p>
-      <a href="/c/0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d">A counterparty
+      <a href="/" data-record-link="0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d">A counterparty
       record</a>, after a supplier genuinely changed accounts &mdash; two signatures, neither of them the
       recipient's.
     </p>
@@ -112,9 +117,21 @@
 </main>
 
 <script type="module">
-  // Nothing to hydrate; this page is static by design. The script tag exists only so
-  // that check-pages.ts can assert the page is wired like its siblings rather than
-  // special-cased.
+  // The only scripted thing here is the chain picker: the links on this page point at
+  // a specific deployment's record, so the page has to know which one it is naming.
+  import {initNetwork, mountPicker, withNetwork} from "/network.js";
+
+  const {current} = await initNetwork();
+  mountPicker(document.querySelector("#network"), null);
+
+  if (current) {
+    for (const a of document.querySelectorAll("[data-record-link]")) {
+      const id = a.getAttribute("data-record-link");
+      if (id) a.href = withNetwork(`/c/${id}`);
+    }
+    const card = document.querySelector("[data-card-link]");
+    if (card) card.href = withNetwork("/");
+  }
 </script>
 </body>
 </html>

@@ -40,7 +40,7 @@ import {concern, judgeDocument} from "../../lib/judgment.js";
 import {classifyWatch, type WatchedCounterparty} from "../../lib/watch.js";
 import {decide, type Evidence, type Reason} from "../../lib/policy.js";
 import {screenCounterparty, toEvidence, unscreened} from "../../lib/screening.js";
-import {POLICY_VERSION, resolveNetwork} from "./config.js";
+import {POLICY_VERSION, deploymentFor, resolveDeployments, resolveNetwork, type Deployment, type NetworkProfile} from "./config.js";
 import {labelStatus, labelSuccessionState} from "../../lib/enums.js";
 
 // ---------------------------------------------------------------------------
@@ -53,8 +53,7 @@ import {labelStatus, labelSuccessionState} from "../../lib/enums.js";
  * Arc's public RPCs reject eth_sendTransaction by design, so even a bug in this
  * file could not move money: the transport it holds has no write method.
  */
-function readClient(env: Env): PublicClient {
-  const network = resolveNetwork(env.HOROS_NETWORK);
+function readClient(network: NetworkProfile): PublicClient {
   return createPublicClient({
     chain: network.key === "arc-mainnet" ? arcMainnet : arcTestnet,
     transport: fallback(network.rpcUrls.map((u) => http(u))),
@@ -113,29 +112,29 @@ type RegistryState = {
   successions: Succession[];
 };
 
-async function readCounterparty(env: Env, id: `0x${string}`): Promise<RegistryState> {
-  const client = readClient(env);
+async function readCounterparty(network: NetworkProfile, deployment: Deployment, id: `0x${string}`): Promise<RegistryState> {
+  const client = readClient(network);
   const [cp, lineage, isPayable, succIds] = await Promise.all([
     client.readContract({
-      address: env.REGISTRY_ADDRESS as `0x${string}`,
+      address: deployment.registry,
       abi: REGISTRY_READ_ABI,
       functionName: "get",
       args: [id],
     }) as Promise<{canonicalName: string; status: number; activeAccount: `0x${string}`}>,
     client.readContract({
-      address: env.REGISTRY_ADDRESS as `0x${string}`,
+      address: deployment.registry,
       abi: REGISTRY_READ_ABI,
       functionName: "lineage",
       args: [id],
     }) as Promise<LineageEntry[]>,
     client.readContract({
-      address: env.REGISTRY_ADDRESS as `0x${string}`,
+      address: deployment.registry,
       abi: REGISTRY_READ_ABI,
       functionName: "isPayable",
       args: [id],
     }) as Promise<boolean>,
     client.readContract({
-      address: env.REGISTRY_ADDRESS as `0x${string}`,
+      address: deployment.registry,
       abi: REGISTRY_READ_ABI,
       functionName: "successionsOf",
       args: [id],
@@ -148,7 +147,7 @@ async function readCounterparty(env: Env, id: `0x${string}`): Promise<RegistrySt
   const successions = await Promise.all(
     succIds.map(async (sid) => {
       const s = (await client.readContract({
-        address: env.REGISTRY_ADDRESS as `0x${string}`,
+        address: deployment.registry,
         abi: REGISTRY_READ_ABI,
         functionName: "succession",
         args: [sid],
@@ -173,23 +172,23 @@ async function readCounterparty(env: Env, id: `0x${string}`): Promise<RegistrySt
   };
 }
 
-async function readBudgets(env: Env, id: `0x${string}`) {
-  const client = readClient(env);
+async function readBudgets(network: NetworkProfile, deployment: Deployment, id: `0x${string}`) {
+  const client = readClient(network);
   const [cap, globalCap, balance] = await Promise.all([
     client.readContract({
-      address: env.VAULT_ADDRESS as `0x${string}`,
+      address: deployment.vault,
       abi: VAULT_READ_ABI,
       functionName: "counterpartyCap",
       args: [id],
     }) as Promise<bigint>,
     client.readContract({
-      address: env.VAULT_ADDRESS as `0x${string}`,
+      address: deployment.vault,
       abi: VAULT_READ_ABI,
       functionName: "globalCap",
       args: [],
     }) as Promise<bigint>,
     client.readContract({
-      address: env.VAULT_ADDRESS as `0x${string}`,
+      address: deployment.vault,
       abi: VAULT_READ_ABI,
       functionName: "balance",
       args: [],
@@ -292,16 +291,17 @@ function supersededIn(text: string): string[] {
 
 async function decideFromDocument(
   env: Env,
+  network: NetworkProfile,
+  deployment: Deployment,
   id: `0x${string}`,
   text: string,
   callerKey: string,
 ): Promise<DecisionCard> {
   const startedAt = Date.now();
-  const network = resolveNetwork(env.HOROS_NETWORK);
 
   const [counterparty, budgets, parsed] = await Promise.all([
-    readCounterparty(env, id),
-    readBudgets(env, id),
+    readCounterparty(network, deployment, id),
+    readBudgets(network, deployment, id),
     Promise.resolve(extractByRegex(text)),
   ]);
 
@@ -311,7 +311,7 @@ async function decideFromDocument(
   // When nothing resolved there is nothing to screen, and the result says so
   // rather than screening the zero address (whose nonce reads zero, which would
   // report "novel" about nothing and file it as diligence).
-  const rpcUrls = resolveNetwork(env.HOROS_NETWORK).rpcUrls;
+  const rpcUrls = network.rpcUrls;
   const screening = account
     ? await screenCounterparty(account, {rpcUrls})
     : unscreened("The document never resolved to an address, so there was nothing to screen.");
@@ -435,8 +435,8 @@ async function decideFromDocument(
       name: network.label,
       chainId: network.chainId,
       explorer: network.explorer,
-      registry: env.REGISTRY_ADDRESS,
-      vault: env.VAULT_ADDRESS,
+      registry: deployment.registry,
+      vault: deployment.vault,
     },
     policyVersion: POLICY_VERSION,
     tookMs: Date.now() - startedAt,
@@ -500,14 +500,18 @@ function parseId(input: string | null): `0x${string}` | null {
  * and nothing to submit with, which is also why it can run on someone else's
  * schedule without becoming a second agent.
  */
-async function checkWatchlist(env: Env): Promise<{id: string; findings: ReturnType<typeof classifyWatch>}[]> {
+async function checkWatchlist(
+  env: Env,
+  network: NetworkProfile,
+  deployment: Deployment,
+): Promise<{id: string; findings: ReturnType<typeof classifyWatch>}[]> {
   const ids = env.WATCH_IDS.split(",")
     .map((s) => s.trim().toLowerCase())
     .filter((s) => /^0x[0-9a-f]{64}$/.test(s)) as `0x${string}`[];
 
   return Promise.all(
     ids.map(async (id) => {
-      const cp = await readCounterparty(env, id);
+      const cp = await readCounterparty(network, deployment, id);
       const watched: WatchedCounterparty = {
         id,
         canonicalName: cp.canonicalName,
@@ -536,7 +540,11 @@ export default {
     ctx.waitUntil(
       (async () => {
         try {
-          const watched = await checkWatchlist(env);
+          // No request to read a network from, so the scheduled run takes the
+          // Worker's configured default. Watching the other chain is a second
+          // scheduled handler, not a second guess.
+          const net = resolveNetwork(env.HOROS_NETWORK);
+          const watched = await checkWatchlist(env, net, deploymentFor(resolveDeployments(env.HOROS_DEPLOYMENTS), net));
           const urgent = watched.flatMap((w) => w.findings).filter((f) => f.severity === "urgent");
           console.log(
             JSON.stringify({
@@ -559,10 +567,18 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Resolved once, near the edge of the request, so every layer below reads the
-    // same chain. A misconfigured value throws here and becomes the 502 below,
-    // rather than a site that quietly reads one chain and links to another.
-    const network = resolveNetwork(env.HOROS_NETWORK);
+    // One request, one chain. Resolved once, near the edge, so every layer below
+    // reads the same network and the same contracts. A misconfigured value throws
+    // here and becomes the 502 below, rather than a site that quietly reads one
+    // chain while its links point at another.
+    //
+    // The caller chooses: `?network=` on a GET, `network` in a POST body. Absent,
+    // it falls back to the Worker's configured default, which is what makes two
+    // URLs for one codebase work (one defaults to testnet, one to mainnet).
+    const deployments = resolveDeployments(env.HOROS_DEPLOYMENTS);
+    const requestedNetwork = url.searchParams.get("network") ?? env.HOROS_NETWORK;
+    const network = resolveNetwork(requestedNetwork);
+    const deployment = deploymentFor(deployments, network);
 
     ctx.waitUntil(
       (async () => {
@@ -633,14 +649,39 @@ export default {
         if (text.trim().length < 8) return json({error: "invoiceText is too short to read anything from"}, 400);
 
         const callerKey = request.headers.get("cf-connecting-ip") ?? "unknown";
-        const card = await decideFromDocument(env, id, text, callerKey);
+        const card = await decideFromDocument(env, network, deployment, id, text, callerKey);
         return json(card, 200, {"cache-control": "no-store"});
+      }
+
+      // Which chains this site can read, and which record to offer as the demo on
+      // each. The page builds its picker from this rather than from a hardcoded
+      // list, so adding a deployment is a configuration change and not a code change
+      // in two places.
+      if (path === "/api/networks") {
+        return json({
+          default: resolveNetwork(env.HOROS_NETWORK).key,
+          networks: Object.values(deployments).length
+            ? Object.keys(deployments).map((key) => {
+                const profile = resolveNetwork(key);
+                const dep = deployments[profile.key]!;
+                return {
+                  key: profile.key,
+                  label: profile.label,
+                  chainId: profile.chainId,
+                  explorer: profile.explorer,
+                  custody: profile.custody,
+                  registry: dep.registry,
+                  demoCounterpartyId: dep.demoCounterpartyId ?? null,
+                };
+              })
+            : [],
+        });
       }
 
       // What the loop sees, on demand. Same function the cron calls, read live —
       // no cache, so the timestamp is the truth about freshness.
       if (path === "/api/watch") {
-        const watched = await checkWatchlist(env);
+        const watched = await checkWatchlist(env, network, deployment);
         return json({
           asOf: new Date().toISOString(),
           watching: watched.length,
@@ -669,7 +710,7 @@ export default {
       if (apiMatch) {
         const id = parseId(decodeURIComponent(apiMatch[1]));
         if (!id) return json({error: "counterparty id must be 0x followed by 64 hex characters"}, 400);
-        const [counterparty, budgets] = await Promise.all([readCounterparty(env, id), readBudgets(env, id)]);
+        const [counterparty, budgets] = await Promise.all([readCounterparty(network, deployment, id), readBudgets(network, deployment, id)]);
         return json({
           counterparty: {
             id,
@@ -709,8 +750,8 @@ export default {
             name: network.label,
             chainId: network.chainId,
             explorer: network.explorer,
-            registry: env.REGISTRY_ADDRESS,
-            vault: env.VAULT_ADDRESS,
+            registry: deployment.registry,
+            vault: deployment.vault,
           },
         });
       }
