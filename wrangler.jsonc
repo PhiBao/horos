@@ -34,15 +34,37 @@
     "ARC_RPC_URLS": "https://rpc.testnet.arc.io,https://rpc.blockdaemon.testnet.arc.io,https://rpc.drpc.testnet.arc.io",
 
     // The live testnet deployment, from deployment.json.
-    "REGISTRY_ADDRESS": "0xc0804d616c8f3d5b42af6e19552eaca4feebe3fd",
-    "VAULT_ADDRESS": "0x0a61a1fec3a6059d2b30cba83fbec85e78576de9",
+    "REGISTRY_ADDRESS": "0x9ea65e1f6a5ca0c55d6e3db18dfed54ded8fe5d1",
+    "VAULT_ADDRESS": "0xa5f226770f71a933201c1aa288e314a4825b31ed",
 
     // Counterparties the scheduled check looks at, comma-separated. Empty means
     // the loop runs and reports that it watches nothing — a cron that silently
     // watches an empty list is how supervision evaporates, so the emptiness is
     // reported rather than assumed.
-    "WATCH_IDS": "0xf85f374f0e39541527bc02e3a90ff684a86c9a099d8db994e09d94be651da9b6"
+    "WATCH_IDS": "0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d"
   },
+
+  // The decision endpoint spends money per request (chain reads plus a paid judgment
+  // call), so it is limited per client IP through the platform binding. An
+  // in-isolate counter would be per-isolate and would look like a control without
+  // being one.
+  "ratelimits": [
+    {
+      // Emergency brake on the endpoint. Generous, because the thing that must not
+      // break is a person clicking through the three samples.
+      "name": "DECISION_LIMITER",
+      "namespace_id": "1001",
+      "simple": {"limit": 60, "period": 60}
+    },
+    {
+      // Gates the paid call rather than the endpoint: a caller who trips it still
+      // gets a verdict, decided from onchain history alone, with the card saying
+      // why. Permissive by design — see the note in worker/src/index.ts.
+      "name": "JUDGMENT_LIMITER",
+      "namespace_id": "1002",
+      "simple": {"limit": 10, "period": 60}
+    }
+  ],
 
   // Every twenty minutes. Often enough that a half-signed ceremony is noticed the
   // same day, seldom enough that a handful of public-RPC reads barely register.

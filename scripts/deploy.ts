@@ -4,8 +4,9 @@
  * Usage:
  *   pnpm deploy:testnet
  *
- * Requires HOROS_DEPLOYER_PRIVATE_KEY in the environment or .env.local.
- * Writes .env.deployed, which the app and the demo script both read.
+ * Requires HOROS_DEPLOYER_PRIVATE_KEY in the shell, .env.local, or .env — in that
+ * order, through the one loader in lib/env.ts. Writes the deployment pointers to
+ * .env.local, replacing only the pointers it owns.
  */
 
 import {writeFileSync, existsSync, readFileSync} from "node:fs";
@@ -13,10 +14,11 @@ import {privateKeyToAccount} from "viem/accounts";
 import {resolve} from "node:path";
 import {getLocalSigner, getPublicClient, getChain, currentNetwork, formatUsdc, USDC_ADDRESS} from "../lib/chain";
 import {registryAbi, vaultAbi} from "../lib/abi";
+import {loadEnv} from "../lib/env.js";
 import RegistryArtifact from "../contracts/out/CounterpartyRegistry.sol/CounterpartyRegistry.json";
 import VaultArtifact from "../contracts/out/CustodyVault.sol/CustodyVault.json";
 
-loadDotEnv();
+loadEnv();
 
 const network = currentNetwork();
 const pk = process.env.HOROS_DEPLOYER_PRIVATE_KEY;
@@ -96,6 +98,25 @@ async function deploy() {
   // is the agent wallet.)
   console.log(`  vault owner    ${account.address}  (the deploying key — hold it like money)`);
 
+  // Only a named executor (or the owner) may trigger a payment. The agent wallet is
+  // the executor; without this the vault would let any stranger spend it in
+  // cap-sized pieces. HOROS_EXECUTOR overrides, for a split deployment.
+  const executor =
+    (process.env.HOROS_EXECUTOR as `0x${string}` | undefined) ??
+    (process.env.CIRCLE_WALLET_ADDRESS as `0x${string}` | undefined) ??
+    account.address;
+  {
+    const execHash = await wallet.writeContract({
+      chain,
+      abi: vaultAbi,
+      address: vault,
+      functionName: "setExecutor",
+      args: [executor, true],
+    });
+    await publicClient.waitForTransactionReceipt({hash: execHash});
+    console.log(`  vault executor ${executor}  (the agent — the only address that may trigger a payment)`);
+  }
+
   // The vault is the only address allowed to attribute payments, so the
   // registry's record of who paid what cannot be forged by anyone else.
   const setVaultHash = await wallet.writeContract({
@@ -146,23 +167,38 @@ async function deploy() {
   return deployment;
 }
 
-function loadDotEnv() {
-  for (const f of [".env.local", ".env"]) {
-    const p = resolve(process.cwd(), f);
-    if (!existsSync(p)) continue;
-    for (const line of readFileSync(p, "utf8").split("\n")) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
-    }
-  }
-}
+/**
+ * Rewrite the deployment pointers, and nothing else.
+ *
+ * This used to drop every `HOROS_*` line, which included the operator's own
+ * credentials — a deploy would delete the very key it had just used, and the
+ * docstring told operators the key could live in this file. Only the keys this
+ * script writes are replaced now.
+ */
+const DEPLOY_OWNS = new Set([
+  "HOROS_DEPLOYMENT",
+  "HOROS_REGISTRY",
+  "HOROS_VAULT",
+  "HOROS_CHAIN_ID",
+  "HOROS_NETWORK",
+  "HOROS_DEPLOYED_AT",
+  "HOROS_DEPLOYER",
+  "NEXT_PUBLIC_HOROS_REGISTRY",
+  "NEXT_PUBLIC_HOROS_VAULT",
+  "NEXT_PUBLIC_HOROS_CHAIN_ID",
+  "NEXT_PUBLIC_HOROS_NETWORK",
+]);
 
 function appendToEnvLocal(block: string) {
   const p = resolve(process.cwd(), ".env.local");
   const existing = existsSync(p) ? readFileSync(p, "utf8") : "";
   const kept = existing
     .split("\n")
-    .filter((l) => l.trim() && !/^(HOROS_|NEXT_PUBLIC_HOROS_)/.test(l))
+    .filter((l) => {
+      const m = l.match(/^\s*([A-Z0-9_]+)\s*=/);
+      if (!m) return l.trim().length > 0;
+      return !DEPLOY_OWNS.has(m[1]);
+    })
     .join("\n");
   writeFileSync(p, (kept ? kept + "\n\n" : "") + "# written by scripts/deploy.ts\n" + block + "\n");
 }

@@ -61,7 +61,16 @@ contract AdversarialTest is Test {
         registry.setVault(address(vault));
 
         vm.prank(business);
-        id = registry.register("Northwind Plumbing Ltd", vendor, business);
+        (uint8 cv, bytes32 cr, bytes32 cs) =
+            vm.sign(VENDOR_KEY, registry.registrationDigest("Northwind Plumbing Ltd", vendor, business));
+        id = registry.register("Northwind Plumbing Ltd", vendor, business, abi.encodePacked(cr, cs, cv));
+
+        // The business is a registered payer, so a role check is the ONLY thing that
+        // can reject its signature in the quorum role. Without this the re-roling
+        // test passes because the payer lookup fails first, and would keep passing
+        // if the role binding were removed — a test that proves nothing.
+        vm.prank(business);
+        registry.registerPayer(id);
 
         usdc.mint(business, 1000e6);
         vm.prank(business);
@@ -70,12 +79,12 @@ contract AdversarialTest is Test {
         vault.deposit(50e6);
     }
 
-    function _digest(bytes32 succId, address to) internal view returns (bytes32) {
-        return registry.successionDigest(id, succId, to, block.timestamp + WINDOW);
+    function _digest(bytes32 succId, address to, uint8 role) internal view returns (bytes32) {
+        return registry.successionDigest(id, succId, to, block.timestamp + WINDOW, role);
     }
 
     function _attest(bytes32 succId, address to, uint8 role, uint256 key) internal {
-        (address signer, bytes32 digest) = (vm.addr(key), _digest(succId, to));
+        (address signer, bytes32 digest) = (vm.addr(key), _digest(succId, to, role));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);
         vm.prank(signer);
         registry.attest(succId, CounterpartyRegistry.AttestRole(role), abi.encodePacked(r, s, v));
@@ -113,7 +122,9 @@ contract AdversarialTest is Test {
         _attest(succId, vendorNew, 0, VENDOR_KEY);
         // (Signed payload built first: expectRevert must sit directly in front of
         // the call, with no cheatcode between them.)
-        bytes32 digest = _digest(succId, vendorNew);
+        // Signed for the role being attempted, because the role is now inside the
+        // digest — a signature made for one role cannot even be presented as another.
+        bytes32 digest = _digest(succId, vendorNew, 1);
         (uint8 v, bytes32 r, bytes32 sigS) = vm.sign(STRANGER_KEY, digest);
         bytes memory sig = abi.encodePacked(r, sigS, v);
         vm.prank(stranger);
@@ -149,7 +160,7 @@ contract AdversarialTest is Test {
         // A single compromised vendor key is no longer enough; the business key
         // would have to fall too, and no one party holds both.
         {
-            bytes32 digest = _digest(succId, accomplice);
+            bytes32 digest = _digest(succId, accomplice, 1);
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(STRANGER_KEY, digest);
             vm.prank(stranger);
             vm.expectRevert(
@@ -163,6 +174,146 @@ contract AdversarialTest is Test {
         }
 
         assertEq(registry.activeAccount(id), vendor, "the business never agreed, so nothing moved");
+    }
+
+    // =====================================================================
+    // 1b. The ceremony cannot be completed out of order or after a break
+    // =====================================================================
+
+    /**
+     * @notice CLAIM UNDER TEST
+     *         "There is no other path to a new active account." activate() checked
+     *         the succession's own state and its expiry, but never that the account
+     *         it moves away from is still the active one.
+     *
+     *         Two fully-signed proposals therefore activate in whatever order the
+     *         submitter chooses, and the second silently overwrites the first —
+     *         moving the counterparty to an address the middle signature never
+     *         covered, with a lineage entry that names the wrong predecessor.
+     */
+    function test_staleProposalCannotOverwriteTheCurrentAccount() public {
+        // Two genuine moves, both fully signed. Each is a real ceremony a business
+        // could have approved at the time it was made.
+        vm.prank(vendor);
+        bytes32 first = registry.proposeSuccession(id, vendorNew, WINDOW);
+        vm.prank(vendor);
+        bytes32 second = registry.proposeSuccession(id, accomplice, WINDOW);
+
+        _attest(first, vendorNew, 0, VENDOR_KEY);
+        _attest(first, vendorNew, 1, BUSINESS_KEY);
+        _attest(second, accomplice, 0, VENDOR_KEY);
+        _attest(second, accomplice, 1, BUSINESS_KEY);
+
+        registry.activate(first);
+        assertEq(registry.activeAccount(id), vendorNew, "precondition: first move landed");
+
+        // The second proposal was against the *old* account. The old account no
+        // longer holds the role, so its consent cannot be spent a second time.
+        vm.expectRevert(
+            abi.encodeWithSelector(CounterpartyRegistry.StaleProposal.selector, vendor, vendorNew)
+        );
+        registry.activate(second);
+
+        assertEq(registry.activeAccount(id), vendorNew, "the account did not move twice");
+    }
+
+    /**
+     * @notice CLAIM UNDER TEST
+     *         "Every future payer sees the gap before sending anything" — and the
+     *         gap is permanent. A proposal already in flight when the gap is
+     *         disclosed used to be exempt, so the account could still move
+     *         afterwards and the public record would say Broken while paying
+     *         somewhere new.
+     */
+    function test_breakDisclosedMidCeremonyStopsTheCeremony() public {
+        vm.prank(vendor);
+        bytes32 succId = registry.proposeSuccession(id, vendorNew, WINDOW);
+        _attest(succId, vendorNew, 0, VENDOR_KEY);
+        _attest(succId, vendorNew, 1, BUSINESS_KEY);
+        assertEq(
+            uint8(registry.succession(succId).state),
+            uint8(CounterpartyRegistry.SuccessionState.Attested),
+            "precondition: fully attested"
+        );
+
+        // The old key is reported lost while the proposal sits unattended.
+        vm.prank(vendor);
+        registry.discloseInheritance(id, vendorNew);
+
+        vm.expectRevert(abi.encodeWithSelector(CounterpartyRegistry.NotClean.selector, id));
+        registry.activate(succId);
+
+        assertEq(registry.activeAccount(id), vendor, "a broken record does not move");
+    }
+
+    /// @dev The same staleness rule guards attest, not only activate. Without it a
+    ///      signature could still be *collected* against a proposal that can never
+    ///      legitimately complete, which spends the signer's key for nothing.
+    function test_aStaleProposalCannotEvenBeAttested() public {
+        vm.prank(vendor);
+        bytes32 stale = registry.proposeSuccession(id, accomplice, WINDOW);
+        vm.prank(vendor);
+        bytes32 live = registry.proposeSuccession(id, vendorNew, WINDOW);
+
+        _attest(live, vendorNew, 0, VENDOR_KEY);
+        _attest(live, vendorNew, 1, BUSINESS_KEY);
+        registry.activate(live);
+        assertEq(registry.activeAccount(id), vendorNew, "precondition: the account moved");
+
+        // The vendor signing the old proposal again: the proposal is against an
+        // account that no longer holds the role.
+        bytes32 digest = _digest(stale, accomplice, 0);
+        (uint8 v, bytes32 r, bytes32 sigS) = vm.sign(VENDOR_KEY, digest);
+        vm.prank(vendor);
+        vm.expectRevert(
+            abi.encodeWithSelector(CounterpartyRegistry.StaleProposal.selector, vendor, vendorNew)
+        );
+        registry.attest(stale, CounterpartyRegistry.AttestRole.OldKey, abi.encodePacked(r, sigS, v));
+    }
+
+    /// @dev And the break rule guards attest too: a record marked Broken must not
+    ///      collect signatures for a move it can never make.
+    function test_aBrokenRecordCannotCollectAttestations() public {
+        vm.prank(vendor);
+        bytes32 succId = registry.proposeSuccession(id, vendorNew, WINDOW);
+        vm.prank(vendor);
+        registry.discloseInheritance(id, vendorNew);
+
+        bytes32 digest = _digest(succId, vendorNew, 0);
+        (uint8 v, bytes32 r, bytes32 sigS) = vm.sign(VENDOR_KEY, digest);
+        vm.prank(vendor);
+        vm.expectRevert(abi.encodeWithSelector(CounterpartyRegistry.NotClean.selector, id));
+        registry.attest(succId, CounterpartyRegistry.AttestRole.OldKey, abi.encodePacked(r, sigS, v));
+    }
+
+    /**
+     * @notice CLAIM UNDER TEST
+     *         A signed digest is bound to the role it was signed for.
+     *
+     *         Unbound, a submitter could take a business signature made for the
+     *         payer half and present it as a quorum signature. It would be accepted,
+     *         the payer half would never fill, and the move would stall until the
+     *         proposal expired — up to thirty days during which the invoice says one
+     *         address and the registry says another.
+     */
+    function test_aSignatureCannotBeReroledAndStallTheCeremony() public {
+        vm.prank(vendor);
+        bytes32 succId = registry.proposeSuccession(id, vendorNew, WINDOW);
+
+        (uint8 v, bytes32 r, bytes32 sigS) = vm.sign(BUSINESS_KEY, _digest(succId, vendorNew, 1));
+        bytes memory forPayer = abi.encodePacked(r, sigS, v);
+
+        // Presented as quorum instead. The recovered address is not the business,
+        // so it does not pass any role check.
+        vm.expectRevert();
+        vm.prank(stranger);
+        registry.attest(succId, CounterpartyRegistry.AttestRole.Quorum, forPayer);
+
+        // And the signature is not consumed by the failed attempt, so the real
+        // payer attestation still works.
+        vm.prank(business);
+        registry.attest(succId, CounterpartyRegistry.AttestRole.Payer, forPayer);
+        assertTrue(registry.succession(succId).payerAttested, "the payer half still fills");
     }
 
     // =====================================================================
@@ -196,6 +347,52 @@ contract AdversarialTest is Test {
             s.state == CounterpartyRegistry.SuccessionState.Attested,
             "the real ceremony still completes"
         );
+    }
+
+    // =====================================================================
+    // 2b. Who may make money move
+    // =====================================================================
+
+    /**
+     * @notice CLAIM UNDER TEST
+     *         "The agent executes payments" — and until this guard existed, so did
+     *         anyone else. `pay` had no caller check, so a stranger could push the
+     *         whole balance to the recorded counterparty in cap-sized pieces, ref
+     *         after ref. The cap bounds each payment; it never bounded the total.
+     */
+    function test_strangerCannotTriggerPayments() public {
+        vm.prank(business);
+        vault.setCounterpartyCap(id, 5e6);
+        assertTrue(registry.isPayable(id), "precondition: payable");
+
+        // A stranger with a fresh reference and enough patience used to be able to
+        // empty the vault one cap at a time.
+        vm.prank(stranger);
+        vm.expectRevert(CustodyVault.NotExecutor.selector);
+        vault.pay(id, 5e6, keccak256("stranger-1"));
+    }
+
+    function test_namedExecutorCanTriggerPaymentsAndLosingTheNameStopsThem() public {
+        vm.prank(business);
+        vault.setCounterpartyCap(id, 5e6);
+        vm.prank(business);
+        vault.setExecutor(stranger, true);
+
+        vm.prank(stranger);
+        vault.pay(id, 5e6, keccak256("exec-1"));
+
+        vm.prank(business);
+        vault.setExecutor(stranger, false);
+
+        vm.prank(stranger);
+        vm.expectRevert(CustodyVault.NotExecutor.selector);
+        vault.pay(id, 5e6, keccak256("exec-2"));
+    }
+
+    function test_onlyTheOwnerNamesExecutors() public {
+        vm.prank(stranger);
+        vm.expectRevert(CustodyVault.NotOwner.selector);
+        vault.setExecutor(stranger, true);
     }
 
     // =====================================================================

@@ -226,6 +226,12 @@ export type DecisionCard = {
   };
   judgment: Evidence["judgment"] | null;
   /**
+   * Set when the paid judgment call was skipped because this caller had used its
+   * allowance. The verdict still arrives; it is decided from onchain history alone,
+   * and the card says which of the two happened rather than blaming the provider.
+   */
+  judgmentSkipped?: "rate-limited";
+  /**
    * The same signals, oriented so that a high number always means "more
    * concerning" - which is the direction the policy thresholds and the direction
    * the card draws. Shipped alongside rather than computed in the browser, because
@@ -285,6 +291,7 @@ async function decideFromDocument(
   env: Env,
   id: `0x${string}`,
   text: string,
+  callerKey: string,
 ): Promise<DecisionCard> {
   const startedAt = Date.now();
 
@@ -311,8 +318,19 @@ async function decideFromDocument(
   // document naming an unknown payee has no relationship to reason about, and
   // asking anyway would produce confident numbers about nothing.
   let judgment: DecisionCard["judgment"] = null;
+  let judgmentSkipped: DecisionCard["judgmentSkipped"];
   let concerns: DecisionCard["concerns"] = [];
-  if (env.JUDGMENT_API_KEY && account) {
+
+  // The judgment call is the only part of this request that costs money. Gate it
+  // separately from the endpoint, so a caller who loops stops costing anything
+  // while still getting an answer.
+  const judgmentAllowed = env.JUDGMENT_LIMITER
+    ? (await env.JUDGMENT_LIMITER.limit({key: `judge:${callerKey}`})).success
+    : true;
+
+  if (env.JUDGMENT_API_KEY && account && !judgmentAllowed) {
+    judgmentSkipped = "rate-limited";
+  } else if (env.JUDGMENT_API_KEY && account) {
     const j = await judgeDocument({
       invoice: {
         counterparty: parsed.counterpartyName ?? counterparty.canonicalName,
@@ -384,6 +402,7 @@ async function decideFromDocument(
       supersededIgnored: supersededIn(text),
     },
     judgment,
+    judgmentSkipped,
     concerns,
     verdict: decision.verdict,
     headline: decision.headline,
@@ -541,18 +560,60 @@ export default {
 
     try {
       if (path === "/healthz") {
-        return json({ok: true, judgment: Boolean(env.JUDGMENT_API_KEY), rpc: env.ARC_RPC_URLS.split(",").length});
+        // `limiter` says whether the binding is attached; `limiterProbe` reports what
+        // it answers for this caller, so a limit that is configured but not enforcing
+        // is visible instead of assumed. Both are cheap and neither spends anything.
+        const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+        const probe = env.DECISION_LIMITER ? (await env.DECISION_LIMITER.limit({key: `healthz:${ip}`})).success : null;
+        return json({
+          ok: true,
+          judgment: Boolean(env.JUDGMENT_API_KEY),
+          rpc: env.ARC_RPC_URLS.split(",").length,
+          limiter: Boolean(env.DECISION_LIMITER),
+          limiterProbe: probe,
+        });
       }
 
       // The decision card. Reads a document, decides, shows its work.
+      //
+      // This is the one endpoint that spends money per request: it fans out to the
+      // chain and calls a paid judgment API, so a stranger with a loop could burn the
+      // quota and the site would go quiet for the people it is for.
+      //
+      // The control is the platform's rate limiting binding. It is deliberately
+      // permissive — the docs describe it as eventually consistent and "not to be
+      // used as an accurate accounting system" — so it damps a loop rather than
+      // stopping one. It is here because damping is worth having and it costs
+      // nothing, not because it is a wall. A deployment on a custom domain should
+      // put a WAF rate limiting rule in front of this path, which needs a zone and
+      // is not available on workers.dev.
       if (path === "/api/decision" && request.method === "POST") {
-        const body = (await request.json()) as {counterpartyId?: string; invoiceText?: string};
+        if (env.DECISION_LIMITER) {
+          const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+          const {success} = await env.DECISION_LIMITER.limit({key: ip});
+          if (!success) {
+            return json({error: "too many requests — the decision card is rate limited"}, 429);
+          }
+        }
+        // A malformed body is the caller's error, not a gateway failure. Reading it
+        // inside the outer try made every bad request a 502, which is both wrong and
+        // a hint about the internals.
+        let body: {counterpartyId?: string; invoiceText?: string};
+        try {
+          body = (await request.json()) as {counterpartyId?: string; invoiceText?: string};
+        } catch {
+          return json({error: "body must be JSON: {counterpartyId, invoiceText}"}, 400);
+        }
+        if (!body || typeof body !== "object") {
+          return json({error: "body must be a JSON object: {counterpartyId, invoiceText}"}, 400);
+        }
         const id = parseId(body.counterpartyId ?? null);
         if (!id) return json({error: "counterpartyId must be 0x followed by 64 hex characters"}, 400);
         const text = (body.invoiceText ?? "").slice(0, 20_000);
         if (text.trim().length < 8) return json({error: "invoiceText is too short to read anything from"}, 400);
 
-        const card = await decideFromDocument(env, id, text);
+        const callerKey = request.headers.get("cf-connecting-ip") ?? "unknown";
+        const card = await decideFromDocument(env, id, text, callerKey);
         return json(card, 200, {"cache-control": "no-store"});
       }
 
@@ -637,14 +698,14 @@ export default {
       // Everything else is a static file, served by the asset binding.
       return env.ASSETS.fetch(request);
     } catch (err) {
-      // A failure here is a failure to read the chain, and saying "internal error"
-      // would be a lie that hides which half broke. Say which.
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(JSON.stringify({error: message, path}));
+      // The detail goes to the log, not to the caller. RPC failures carry endpoint
+      // and parser internals, and a public endpoint handing those to anonymous
+      // callers is a map of the backend for anyone who sends a malformed request.
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error(JSON.stringify({error: detail, path}));
       return json(
         {
           error: "could not complete the request",
-          detail: message,
           hint:
             "If this is a chain read failure the Arc public RPC is the usual cause. " +
             "The decision itself is still enforced in the contract, which is unaffected by this site being down.",

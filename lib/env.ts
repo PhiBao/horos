@@ -52,7 +52,12 @@ export function loadEnv(): void {
     for (const line of text.split("\n")) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
       if (!m) continue;
-      const [, key, raw] = m;
+      const [, key, rawValue] = m;
+      // The docstring above promised `#` comments, so a trailing comment must not
+      // become part of the value. Inside quotes it is data; outside, it is a comment.
+      const raw = rawValue.startsWith('"') || rawValue.startsWith("'")
+        ? rawValue
+        : (rawValue.split(/\s+#/)[0] ?? rawValue).trim();
       // The shell wins, even when its value is empty.
       if (fromShell.has(key) || loaded.has(key)) continue;
       process.env[key] = raw.replace(/^["']|["']$/g, "");

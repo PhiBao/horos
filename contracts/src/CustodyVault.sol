@@ -23,7 +23,8 @@ import {CounterpartyRegistry} from "./CounterpartyRegistry.sol";
  *      to be the same counterparty the payer already had.
  *
  *      The owner may move the whole balance out -- withdraw() takes an arbitrary
- *      address -- and may stop payments. The owner cannot make a *payment* happen
+ *      address -- may stop payments, and names who may trigger one. The owner
+ *      cannot make a *payment* happen
  *      through pay(), and cannot make one go somewhere new. That distinction is the
  *      whole reason the owner must be a key the business holds and never the agent
  *      wallet: a compromised agent holding signing credentials could otherwise drain
@@ -35,6 +36,21 @@ contract CustodyVault {
 
     address public owner;
     bool public paused;
+
+    /**
+     * @notice Who is allowed to trigger a payment.
+     *
+     * @dev The destination is not a parameter, so a caller cannot steal — but a
+     *      caller could still spend. `pay` was open to the world, which meant any
+     *      stranger could push the whole balance to the recorded counterparty in
+     *      cap-sized pieces, ref after ref, paying invoices the business had not
+     *      approved. The cap limits each payment; it never limited the total.
+     *
+     *      So the executor is named. It is the agent wallet — the thing that holds
+     *      no key — and the owner, who is the business. Nobody else can make money
+     *      move, and that is a property of the interface rather than of a policy.
+     */
+    mapping(address => bool) public executor;
 
     /// @notice Largest single payment the vault will make, to anyone.
     uint256 public globalCap;
@@ -49,6 +65,7 @@ contract CustodyVault {
         bytes32 indexed counterpartyId, address indexed account, address indexed by, uint256 amount, bytes32 ref
     );
     event PausedSet(bool paused);
+    event ExecutorSet(address indexed who, bool allowed);
     event GlobalCapSet(uint256 cap);
     event CounterpartyCapSet(bytes32 indexed counterpartyId, uint256 cap);
     event Withdrawn(address indexed to, uint256 amount);
@@ -64,6 +81,7 @@ contract CustodyVault {
     error DuplicateReference(bytes32 ref);
     error ZeroAmount();
     error TransferFailed();
+    error NotExecutor();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -93,6 +111,7 @@ contract CustodyVault {
         external
         returns (address account)
     {
+        if (!executor[msg.sender] && msg.sender != owner) revert NotExecutor();
         if (paused) revert VaultPaused();
         if (amount == 0) revert ZeroAmount();
         if (referenceUsed[ref]) revert DuplicateReference(ref);
@@ -135,6 +154,13 @@ contract CustodyVault {
     // ---------------------------------------------------------------------
     // Owner configuration. None of this can make a payment happen or redirect one.
     // ---------------------------------------------------------------------
+
+    /// @notice Name an executor, or remove one. Only the owner decides who may spend.
+    function setExecutor(address who, bool allowed) external onlyOwner {
+        if (who == address(0)) revert ZeroAddress();
+        executor[who] = allowed;
+        emit ExecutorSet(who, allowed);
+    }
 
     function setPaused(bool p) external onlyOwner {
         paused = p;

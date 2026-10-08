@@ -108,7 +108,15 @@ contract CounterpartyRegistry {
     // ---------------------------------------------------------------------
 
     bytes32 public constant SUCCESSION_ATTESTATION_TYPEHASH = keccak256(
-        "SuccessionAttestation(bytes32 counterpartyId,bytes32 successionId,address to,uint256 expiry)"
+        "SuccessionAttestation(bytes32 counterpartyId,bytes32 successionId,address to,uint256 expiry,uint8 role)"
+    );
+
+    /// @dev The first account consents to being registered. Without this, a
+    ///      stranger can open a record at someone else's address and leave the
+    ///      honest business either locked out of its own counterparty or forced to
+    ///      abandon the name.
+    bytes32 public constant REGISTRATION_CONSENT_TYPEHASH = keccak256(
+        "RegisterCounterparty(bytes32 nameHash,address firstAccount,address business)"
     );
 
     bytes32 private constant _EIP712_DOMAIN_TYPEHASH = keccak256(
@@ -147,6 +155,13 @@ contract CounterpartyRegistry {
 
     /// @dev Global replay protection: a signature is good exactly once, ever.
     mapping(bytes32 => bool) public signatureUsed;
+
+    /// @dev One key counts once per proposal, whatever role it is presented under.
+    ///      Role-binding the digest stops a captured signature being spent under a
+    ///      different role, but it also means a fresh signature per role is possible
+    ///      — so the business could sign again as quorum and satisfy its own demand
+    ///      for independent scrutiny. This is what refuses that.
+    mapping(bytes32 => mapping(address => bool)) public signerUsed;
 
     /// @dev Only the vault may call this.
     mapping(address => bool) public vault;
@@ -201,7 +216,12 @@ contract CounterpartyRegistry {
     error ProposalExpired(uint64 expiresAt);
     error BadSigner(address expected, address got);
     error NotBusiness(address expected, address got);
+    error IdTaken(bytes32 id);
+    error BadConsent(address expected, address got);
+    error StaleProposal(address proposalFrom, address activeAccount);
+    error BusinessIsRecipient();
     error SignerIsSuccessor();
+    error SignerAlreadyUsed();
     error SignatureReplay();
     error NotAttested();
     error AlreadyAttested();
@@ -247,15 +267,34 @@ contract CounterpartyRegistry {
         );
     }
 
-    function successionDigest(bytes32 counterpartyId, bytes32 successionId, address to, uint256 expiry)
+    function successionDigest(bytes32 counterpartyId, bytes32 successionId, address to, uint256 expiry, uint8 role)
         public
         view
         returns (bytes32)
     {
-        return _attestationDigest(counterpartyId, successionId, to, expiry);
+        return _attestationDigest(counterpartyId, successionId, to, expiry, role);
     }
 
-    function _attestationDigest(bytes32 counterpartyId, bytes32 successionId, address to, uint256 expiry)
+    /// @notice The message the first account signs to consent to being registered.
+    function registrationDigest(string calldata canonicalName, address firstAccount, address business)
+        public
+        view
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                domainSeparator(),
+                keccak256(
+                    abi.encode(
+                        REGISTRATION_CONSENT_TYPEHASH, keccak256(bytes(_canonicalise(canonicalName))), firstAccount, business
+                    )
+                )
+            )
+        );
+    }
+
+    function _attestationDigest(bytes32 counterpartyId, bytes32 successionId, address to, uint256 expiry, uint8 role)
         private
         view
         returns (bytes32)
@@ -266,7 +305,7 @@ contract CounterpartyRegistry {
                 domainSeparator(),
                 keccak256(
                     abi.encode(
-                        SUCCESSION_ATTESTATION_TYPEHASH, counterpartyId, successionId, to, expiry
+                        SUCCESSION_ATTESTATION_TYPEHASH, counterpartyId, successionId, to, expiry, role
                     )
                 )
             )
@@ -290,23 +329,52 @@ contract CounterpartyRegistry {
      *      names the business, because for a brand-new counterparty there is nobody else
      *      to ask; from then on, only the business speaks for the payer side.
      */
-    function register(string calldata canonicalName, address firstAccount, address business)
-        external
-        returns (bytes32 id)
-    {
+    function register(
+        string calldata canonicalName,
+        address firstAccount,
+        address business,
+        bytes calldata consent
+    ) external returns (bytes32 id) {
         if (firstAccount == address(0)) revert ZeroAddress();
         if (business == address(0)) revert ZeroAddress();
+        // A counterparty whose own account pays it cannot rotate: the payer
+        // attestation requires a signer that is not the account being replaced.
+        // Refusing the shape here is cheaper than a counterparty that can never
+        // leave a bad key.
+        if (business == firstAccount) revert BusinessIsRecipient();
 
         string memory canon = _canonicalise(canonicalName);
         if (bytes(canon).length == 0) revert EmptyName();
 
         bytes32 nameHash = keccak256(bytes(canon));
-        bytes32 existing = nameIndex[nameHash];
-        if (existing != bytes32(0)) revert NameTaken(nameHash, existing);
+
+        // The account itself must agree. An id is derived from the name and the
+        // first account, so a stranger who could name someone else's account would
+        // create the record that account's real business is going to want -- and
+        // would hold the payer half of it. Consent is what makes "first to pay"
+        // meaningful; without it, "first to type" was enough.
+        {
+            bytes32 consentDigest = keccak256(
+                abi.encodePacked(
+                    "\x19\x01",
+                    domainSeparator(),
+                    keccak256(abi.encode(REGISTRATION_CONSENT_TYPEHASH, nameHash, firstAccount, business))
+                )
+            );
+            address consenter = _recover(consentDigest, consent);
+            if (consenter != firstAccount) revert BadConsent(firstAccount, consenter);
+        }
 
         id = keccak256(abi.encode(nameHash, firstAccount, address(this)));
+        if (_counterparties[id].status != CounterpartyStatus.None) revert IdTaken(id);
 
-        nameIndex[nameHash] = id;
+        // Names are not exclusive. The id is the identity; a name is a label two
+        // different counterparties may share, and making the label unique handed
+        // anyone a way to lock a competitor out of the registry for free. The name
+        // index keeps the first id seen under a name as a convenience only --
+        // callers who need a specific record use counterpartyIdFor().
+        if (nameIndex[nameHash] == bytes32(0)) nameIndex[nameHash] = id;
+        _byName[nameHash].push(id);
 
         Counterparty storage c = _counterparties[id];
         c.id = id;
@@ -328,7 +396,6 @@ contract CounterpartyRegistry {
         );
 
         isPayer[id][msg.sender] = true;
-        _byName[nameHash].push(id);
 
         emit CounterpartyRegistered(id, canon, firstAccount, msg.sender);
     }
@@ -386,6 +453,7 @@ contract CounterpartyRegistry {
         if (c.status != CounterpartyStatus.Clean) revert NotClean(id);
         if (to == address(0)) revert ZeroAddress();
         if (to == c.activeAccount) revert SameAccount();
+        if (to == c.business) revert BusinessIsRecipient();
 
         // Only the party currently entitled to the money, or someone who pays it, may propose.
         if (msg.sender != c.activeAccount && !isPayer[id][msg.sender]) revert NotProposer();
@@ -421,6 +489,19 @@ contract CounterpartyRegistry {
      */
     function attest(bytes32 successionId, AttestRole role, bytes calldata signature) external {
         Succession storage s = _successions[successionId];
+        Counterparty storage c = _counterparties[s.counterpartyId];
+
+        // A break is permanent, so it must also stop a proposal that was already
+        // in flight when it was disclosed. Otherwise the account moves after the
+        // public record says the relationship is over.
+        if (c.status != CounterpartyStatus.Clean) revert NotClean(s.counterpartyId);
+
+        // A proposal is against the account that was active when it was made. Once
+        // that changes, the old proposal is a request from a party that no longer
+        // holds the role, and replaying it would let an old key move the account
+        // twice -- with the middle address never signed for.
+        if (s.from != c.activeAccount) revert StaleProposal(s.from, c.activeAccount);
+
         if (s.state != SuccessionState.Proposed && s.state != SuccessionState.Attested) {
             revert NotProposed();
         }
@@ -430,7 +511,7 @@ contract CounterpartyRegistry {
             revert ProposalExpired(s.expiresAt);
         }
 
-        bytes32 digest = successionDigest(s.counterpartyId, s.id, s.to, s.expiresAt);
+        bytes32 digest = successionDigest(s.counterpartyId, s.id, s.to, s.expiresAt, uint8(role));
         address signer = _recover(digest, signature);
 
         // The account trying to receive the money can never authorise its own arrival.
@@ -440,6 +521,7 @@ contract CounterpartyRegistry {
         // legitimately; the same party signing twice does not count twice.
         bytes32 used = keccak256(abi.encode(signer, digest));
         if (signatureUsed[used]) revert SignatureReplay();
+        if (signerUsed[s.id][signer]) revert SignerAlreadyUsed();
 
         bool complete = false;
 
@@ -451,7 +533,6 @@ contract CounterpartyRegistry {
             // is what the previous version did, and registration is permissionless —
             // so any stranger could countersign their own redirect. The business was
             // named at registration precisely so this check has one right answer.
-            Counterparty storage c = _counterparties[s.counterpartyId];
             if (signer != c.business) revert NotBusiness(c.business, signer);
             if (signer == s.from) revert BadSigner(s.from, signer);
             if (s.payerAttested) revert AlreadyAttested();
@@ -465,6 +546,7 @@ contract CounterpartyRegistry {
 
         // The signature is spent only once the signer and the role both check out.
         signatureUsed[used] = true;
+        signerUsed[s.id][signer] = true;
 
         if (role == AttestRole.OldKey) {
             s.oldKeyAttested = true;
@@ -474,7 +556,6 @@ contract CounterpartyRegistry {
             s.quorumAttestors.push(signer);
         }
 
-        Counterparty storage c = _counterparties[s.counterpartyId];
         uint16 need = c.quorumRequired;
         if (s.oldKeyAttested && s.payerAttested && s.quorumAttestors.length >= need) {
             s.state = SuccessionState.Attested;
@@ -495,13 +576,20 @@ contract CounterpartyRegistry {
             revert AlreadyFinal();
         }
         if (s.state != SuccessionState.Attested) revert NotAttested();
+
+        Counterparty storage c = _counterparties[s.counterpartyId];
+
+        // Checked here as well as in attest(): a proposal can complete before a
+        // break is disclosed and be activated after it, and the activation is the
+        // step that actually moves the money.
+        if (c.status != CounterpartyStatus.Clean) revert NotClean(s.counterpartyId);
+        if (s.from != c.activeAccount) revert StaleProposal(s.from, c.activeAccount);
+
         if (block.timestamp > s.expiresAt) {
             s.state = SuccessionState.Expired;
             emit SuccessionExpired(successionId);
             revert ProposalExpired(s.expiresAt);
         }
-
-        Counterparty storage c = _counterparties[s.counterpartyId];
 
         uint16 count = 2; // old key + payer
         if (c.quorumRequired > 0) count = uint16(uint16(2) + s.quorumAttestors.length);

@@ -161,6 +161,18 @@ function renderReading(card) {
  * line of code they can go and read.
  */
 function renderJudgment(card) {
+  // The paid call may have been skipped on purpose. Say that, rather than showing
+  // the generic "no provider" copy, which would read as a broken deployment.
+  if (card.judgmentSkipped === "rate-limited") {
+    return `
+      <section class="block" data-block="judgment">
+        <h3>What the document says</h3>
+        <p class="none">The judgment call was skipped: this caller reached its allowance for
+        the minute. The verdict above was still reached, from onchain history alone — a
+        judgment that is absent is never a judgment that passed.</p>
+      </section>`;
+  }
+
   const j = card.judgment;
   if (!j) {
     return `

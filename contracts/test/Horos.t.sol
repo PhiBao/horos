@@ -65,8 +65,9 @@ contract HorosTest is Test {
         vm.prank(business);
         usdc.approve(address(vault), type(uint256).max);
 
+        id = _register("Northwind Plumbing Ltd", vendor, business);
         vm.prank(business);
-        id = registry.register("Northwind Plumbing Ltd", vendor, business);
+        vault.setExecutor(business, true);
 
         // Budgets are fail-closed: an uncapped counterparty cannot be paid at all.
         vm.prank(business);
@@ -97,8 +98,17 @@ contract HorosTest is Test {
 
     /// @dev Ask the contract for the digest rather than rebuilding EIP-712 by hand, so the
     ///      test proves the signature path works rather than proving our own encoder works.
-    function _digest(bytes32 cpId, bytes32 succId, address to, uint256 expiry) internal view returns (bytes32) {
-        return registry.successionDigest(cpId, succId, to, expiry);
+    function _digest(bytes32 cpId, bytes32 succId, address to, uint256 expiry, uint8 role) internal view returns (bytes32) {
+        return registry.successionDigest(cpId, succId, to, expiry, role);
+    }
+
+    /// @dev Register with the first account's consent, signed by its own key.
+    ///      The business submits, so it is the registrant and therefore a payer.
+    function _register(string memory name, address firstAccount, address biz) internal returns (bytes32) {
+        bytes32 digest = registry.registrationDigest(name, firstAccount, biz);
+        bytes memory consent = _sign(firstAccount, digest);
+        vm.prank(biz);
+        return registry.register(name, firstAccount, biz, consent);
     }
 
     function _propose(address proposer, address to) internal returns (bytes32 succId) {
@@ -108,7 +118,7 @@ contract HorosTest is Test {
 
     function _rawAttest(bytes32 succId, CounterpartyRegistry.AttestRole role, address signer) internal {
         CounterpartyRegistry.Succession memory s = registry.succession(succId);
-        bytes memory pk = _sign(signer, _digest(s.counterpartyId, s.id, s.to, s.expiresAt));
+        bytes memory pk = _sign(signer, _digest(s.counterpartyId, s.id, s.to, s.expiresAt, uint8(role)));
         vm.prank(signer);
         registry.attest(succId, role, pk);
     }
@@ -121,7 +131,7 @@ contract HorosTest is Test {
         bytes memory err
     ) internal {
         CounterpartyRegistry.Succession memory s = registry.succession(succId);
-        bytes memory pk = _sign(signer, _digest(s.counterpartyId, s.id, s.to, s.expiresAt));
+        bytes memory pk = _sign(signer, _digest(s.counterpartyId, s.id, s.to, s.expiresAt, uint8(role)));
         vm.expectRevert(err);
         vm.prank(signer);
         registry.attest(succId, role, pk);
@@ -208,7 +218,8 @@ contract HorosTest is Test {
     function test_impostorCannotSignForTheOldAccount() public {
         bytes32 succId = _propose(vendor, vendorNew);
         CounterpartyRegistry.Succession memory s = registry.succession(succId);
-        bytes memory forged = _sign(impostor, _digest(s.counterpartyId, s.id, s.to, s.expiresAt));
+        bytes memory forged =
+            _sign(impostor, _digest(s.counterpartyId, s.id, s.to, s.expiresAt, uint8(CounterpartyRegistry.AttestRole.OldKey)));
 
         // A valid signature, by the wrong key.
         vm.expectRevert();
@@ -248,7 +259,8 @@ contract HorosTest is Test {
     function test_signatureCannotBeReplayedAgainstTheSameProposal() public {
         bytes32 succId = _propose(vendor, vendorNew);
         CounterpartyRegistry.Succession memory s = registry.succession(succId);
-        bytes memory pk = _sign(vendor, _digest(s.counterpartyId, s.id, s.to, s.expiresAt));
+        bytes memory pk =
+            _sign(vendor, _digest(s.counterpartyId, s.id, s.to, s.expiresAt, uint8(CounterpartyRegistry.AttestRole.OldKey)));
 
         vm.prank(vendor);
         registry.attest(succId, CounterpartyRegistry.AttestRole.OldKey, pk);
@@ -276,6 +288,11 @@ contract HorosTest is Test {
     }
 
     /// @dev A payer cannot fill both the payer slot and a quorum slot.
+    /// @dev One key cannot satisfy two roles. Both halves of that matter: the role is
+    ///      inside the digest (so a captured signature cannot be re-presented under
+    ///      another role), and a signer counts once per proposal (so a freshly signed
+    ///      second role does not count either). Without the second rule the business
+    ///      could satisfy its own demand for independent scrutiny.
     function test_onePayerCannotSatisfyTwoRoles() public {
         vm.prank(vendor);
         registry.setQuorumRequired(id, 1);
@@ -285,8 +302,32 @@ contract HorosTest is Test {
             succId,
             CounterpartyRegistry.AttestRole.Quorum,
             business,
-            abi.encodeWithSelector(CounterpartyRegistry.SignatureReplay.selector)
+            abi.encodeWithSelector(CounterpartyRegistry.SignerAlreadyUsed.selector)
         );
+    }
+
+    /// @dev The attack this closes: a submitter takes a business signature made for the
+    ///      payer half and presents it as a quorum signature. The signature is spent,
+    ///      the payer half never fills, and the ceremony cannot complete.
+    function test_businessSignatureCannotBeReroledAsQuorum() public {
+        bytes32 succId = _propose(vendor, vendorNew);
+        CounterpartyRegistry.Succession memory s = registry.succession(succId);
+
+        (uint8 v, bytes32 r, bytes32 sigS) = vm.sign(
+            BUSINESS_KEY,
+            _digest(s.counterpartyId, s.id, s.to, s.expiresAt, uint8(CounterpartyRegistry.AttestRole.Payer))
+        );
+        bytes memory payerSig = abi.encodePacked(r, sigS, v);
+
+        // Presented under the role it was made for: accepted.
+        vm.prank(business);
+        registry.attest(succId, CounterpartyRegistry.AttestRole.Payer, payerSig);
+
+        // Re-presented under another role with the same bytes: the recovered address
+        // is not the business at all, so the role check rejects it.
+        vm.expectRevert();
+        vm.prank(attacker);
+        registry.attest(succId, CounterpartyRegistry.AttestRole.Quorum, payerSig);
     }
 
     function test_expiredProposalCannotActivate() public {
@@ -352,7 +393,7 @@ contract HorosTest is Test {
     /// @dev An uncapped counterparty starts with a budget of zero.
     function test_newCounterpartyHasNoBudgetUntilAPersonGivesItOne() public {
         vm.prank(business);
-        bytes32 fresh = registry.register("Bright Spark Ltd", vendorNew, business);
+        bytes32 fresh = _register("Bright Spark Ltd", vendorNew, business);
 
         vm.prank(business);
         vm.expectRevert(abi.encodeWithSelector(CustodyVault.OverCounterpartyCap.selector, fresh, 10e6, 0));
@@ -502,11 +543,50 @@ contract HorosTest is Test {
     // Registration integrity
     // =====================================================================
 
-    function test_cannotRegisterTheSameNameTwice() public {
-        bytes32 nameHash = registry.canonicalNameHash("Northwind Plumbing Ltd");
+    /// @dev Names are labels, not identities. Two counterparties may share one; the id
+    ///      is what is unique, and it is derived from the account, not chosen.
+    function test_theSameNameMayBelongToTwoCounterparties() public {
+        bytes32 other = _register("Northwind Plumbing Ltd", attacker, impostor);
+        assertTrue(other != id, "same name, different first account, different id");
+        assertEq(registry.get(other).activeAccount, attacker);
+        // The record already there is untouched.
+        assertEq(registry.activeAccount(id), vendor);
+    }
+
+    /// @dev The id is derived from the name and the first account, so re-registering
+    ///      that pair is an attempt to re-initialise a record that already exists —
+    ///      which would overwrite its business, its active account and its lineage.
+    ///      Consent is not enough here: the vendor did sign this one. The id is taken.
+    function test_anExistingRecordCannotBeReinitialised() public {
+        bytes memory consent =
+            _sign(vendor, registry.registrationDigest("Northwind Plumbing Ltd", vendor, impostor));
+        vm.prank(impostor);
+        vm.expectRevert(abi.encodeWithSelector(CounterpartyRegistry.IdTaken.selector, id));
+        registry.register("Northwind Plumbing Ltd", vendor, impostor, consent);
+    }
+
+    /// @dev The account must consent to being registered. Without this, a stranger
+    ///      opens the record someone else's business is going to need, and owns the
+    ///      payer half of it before that business ever arrives.
+    function test_cannotRegisterSomebodyElsesAccountWithoutConsent() public {
+        bytes memory forged = _sign(impostor, registry.registrationDigest("Squatted Ltd", vendor, attacker));
         vm.prank(attacker);
-        vm.expectRevert(abi.encodeWithSelector(CounterpartyRegistry.NameTaken.selector, nameHash, id));
-        registry.register("  NORTHWIND PLUMBING LTD  ", attacker, attacker);
+        vm.expectRevert(abi.encodeWithSelector(CounterpartyRegistry.BadConsent.selector, vendor, impostor));
+        registry.register("Squatted Ltd", vendor, attacker, forged);
+    }
+
+    /// @dev A counterparty that pays itself could never rotate: the payer
+    ///      attestation needs a signer that is not the account being replaced.
+    function test_cannotRegisterTheBusinessAsTheAccount() public {
+        bytes memory consent = _sign(business, registry.registrationDigest("Self-paying Ltd", business, business));
+        vm.expectRevert(CounterpartyRegistry.BusinessIsRecipient.selector);
+        registry.register("Self-paying Ltd", business, business, consent);
+    }
+
+    function test_cannotProposeMovingMoneyToTheBusinessItself() public {
+        vm.prank(vendor);
+        vm.expectRevert(CounterpartyRegistry.BusinessIsRecipient.selector);
+        registry.proposeSuccession(id, business, WINDOW);
     }
 
     /// @dev The id is derived from the name and the first account paid. Nothing to choose.
@@ -540,12 +620,26 @@ contract VaultOwnershipTest is Test {
     CustodyVault vault;
     MockUSDC usdc;
 
-    address business = makeAddr("business2");
-    address vendor = makeAddr("vendor2");
+    uint256 constant VENDOR2_KEY = 0x5EED2;
+    uint256 constant BUSINESS2_KEY = 0xB2;
+
+    address business;
+    address vendor;
     address agent = makeAddr("agent");
     bytes32 id;
 
+    /// @dev The account consents, signed by its own key. makeAddr cannot sign.
+    function _register(string memory name, address firstAccount, address biz, uint256 key)
+        internal
+        returns (bytes32)
+    {
+        (uint8 v, bytes32 r, bytes32 sigS) = vm.sign(key, registry.registrationDigest(name, firstAccount, biz));
+        return registry.register(name, firstAccount, biz, abi.encodePacked(r, sigS, v));
+    }
+
     function setUp() public {
+        business = vm.addr(BUSINESS2_KEY);
+        vendor = vm.addr(VENDOR2_KEY);
         usdc = new MockUSDC();
         registry = new CounterpartyRegistry(address(this));
         vault = new CustodyVault(address(registry), address(usdc), business, 1_000_000e6);
@@ -554,7 +648,7 @@ contract VaultOwnershipTest is Test {
         vm.prank(business);
         usdc.approve(address(vault), type(uint256).max);
         vm.prank(business);
-        id = registry.register("Ownership Test Co", vendor, business);
+        id = _register("Ownership Test Co", vendor, business, VENDOR2_KEY);
         vm.prank(business);
         vault.setCounterpartyCap(id, 1_000e6);
         vm.prank(business);

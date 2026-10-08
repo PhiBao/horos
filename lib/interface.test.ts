@@ -28,6 +28,21 @@ function source(file: string): string {
     .replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
+/**
+ * The body of one function, up to the next declaration.
+ *
+ * Fixed-length slices were the first attempt and they broke the moment a function
+ * grew: the assertion silently read past the end of the function it was checking and
+ * failed for the wrong reason. Slicing to the next declaration cannot drift.
+ */
+export function fnBody(src: string, name: string): string {
+  const start = src.indexOf(`function ${name}(`);
+  if (start < 0) throw new Error(`no function ${name} in this source`);
+  const rest = src.slice(start + 1);
+  const next = rest.indexOf("\n    function ");
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
 /** `name(a, b, c)` for every function declaration in a file. */
 function signatures(src: string): {name: string; params: string}[] {
   return [...src.matchAll(/function\s+(\w+)\s*\(([^)]*)\)/g)].map((m) => ({name: m[1], params: m[2]}));
@@ -77,6 +92,29 @@ describe("the vault cannot be given a destination", () => {
   });
 });
 
+describe("the vault only lets named callers spend", () => {
+  const src = source("CustodyVault.sol");
+
+  it("checks the caller before it moves anything", () => {
+    const pay = fnBody(src, "pay");
+    expect(pay).toMatch(/if\s*\(\s*!executor\[msg\.sender\]\s*&&\s*msg\.sender\s*!=\s*owner\s*\)\s*revert\s+NotExecutor/);
+  });
+
+  it("lets only the owner name an executor", () => {
+    const set = fnBody(src, "setExecutor");
+    expect(set).toMatch(/onlyOwner/);
+  });
+
+  it("still takes no destination", () => {
+    // The executor list must not have loosened the original property. Read the
+    // parameter list, not the body: the return type is an address and matching the
+    // body would flag the function's own return value.
+    const pay = signatures(src).find((f) => f.name === "pay");
+    expect(pay).toBeDefined();
+    expect(pay!.params).not.toMatch(/\baddress\b/);
+  });
+});
+
 describe("an account cannot be reassigned without the ceremony", () => {
   const src = source("CounterpartyRegistry.sol");
   const fns = signatures(src);
@@ -100,12 +138,10 @@ describe("an account cannot be reassigned without the ceremony", () => {
     ).toBe(2);
 
     // One is registration, which creates a counterparty rather than reassigning one.
-    const register = src.slice(src.indexOf("function register("));
-    expect(register.slice(0, 1500)).toMatch(/activeAccount\s*=\s*firstAccount/);
+    expect(fnBody(src, "register")).toMatch(/activeAccount\s*=\s*firstAccount/);
 
     // The other is the ceremony.
-    const activate = src.slice(src.indexOf("function activate("));
-    expect(activate.slice(0, 3000)).toMatch(/activeAccount\s*=\s*s\.to/);
+    expect(fnBody(src, "activate")).toMatch(/activeAccount\s*=\s*s\.to/);
   });
 
   it("bakes the first account into the counterparty's identity, so registration cannot rebrand", () => {
@@ -128,15 +164,57 @@ describe("an account cannot be reassigned without the ceremony", () => {
     // enough to redirect everything. The business is named up front precisely so
     // the check below has one right answer.
     expect(src).toMatch(/address\s+business;/);
-    const register = src.slice(src.indexOf("function register("));
-    expect(register.slice(0, 2500)).toMatch(/address\s+business\)/);
-    expect(register.slice(0, 2500)).toMatch(/c\.business\s*=\s*business/);
+    const register = fnBody(src, "register");
+    expect(register).toMatch(/c\.business\s*=\s*business/);
+    // And the business is not the account, because a counterparty that pays itself
+    // can never rotate: the payer attestation needs a signer that is not the
+    // account being replaced.
+    expect(register).toMatch(/if\s*\(\s*business\s*==\s*firstAccount\s*\)\s*revert\s+BusinessIsRecipient/);
   });
 
   it("satisfies the payer half with the business key and no other", () => {
-    const attest = src.slice(src.indexOf("function attest("));
-    expect(attest.slice(0, 3000)).toMatch(/signer\s*!=\s*c\.business/);
-    expect(attest.slice(0, 3000)).toMatch(/revert\s+NotBusiness/);
+    const attest = fnBody(src, "attest");
+    expect(attest).toMatch(/signer\s*!=\s*c\.business/);
+    expect(attest).toMatch(/revert\s+NotBusiness/);
+  });
+
+  it("refuses a proposal that is stale or belongs to a broken record", () => {
+    // A proposal is against the account that was active when it was made. Once that
+    // changes, replaying the old proposal would move the counterparty twice, and the
+    // middle address would never have signed for the second move.
+    for (const fn of ["attest", "activate"]) {
+      const body = fnBody(src, fn);
+      expect(body, `${fn} must reject a stale proposal`).toMatch(
+        /if\s*\(\s*s\.from\s*!=\s*c\.activeAccount\s*\)\s*revert\s+StaleProposal/,
+      );
+      expect(body, `${fn} must reject a broken record`).toMatch(/status\s*!=\s*CounterpartyStatus\.Clean/);
+    }
+  });
+
+  it("binds the role into the signed digest, so a signature cannot be re-roled", () => {
+    expect(src).toMatch(
+      /SuccessionAttestation\(bytes32 counterpartyId,bytes32 successionId,address to,uint256 expiry,uint8 role\)/,
+    );
+    expect(fnBody(src, "attest")).toMatch(/successionDigest\([^)]*uint8\(role\)/);
+  });
+
+  it("lets one key count once per proposal, whatever role it is presented under", () => {
+    // Role-binding alone is not enough: a fresh signature per role would let the
+    // business satisfy its own demand for independent scrutiny.
+    expect(src).toMatch(/mapping\(bytes32 => mapping\(address => bool\)\) public signerUsed/);
+    expect(fnBody(src, "attest")).toMatch(/if\s*\(\s*signerUsed\[s\.id\]\[signer\]\s*\)\s*revert\s+SignerAlreadyUsed/);
+  });
+
+  it("requires the first account's consent to be registered at all", () => {
+    // Without consent a stranger opens the record someone else's business is going
+    // to need, and owns the payer half of it. "First to pay" only means something
+    // once "first to type" is not enough.
+    expect(src).toMatch(/REGISTRATION_CONSENT_TYPEHASH/);
+    const register = fnBody(src, "register");
+    expect(register).toMatch(/if\s*\(\s*consenter\s*!=\s*firstAccount\s*\)\s*revert\s+BadConsent/);
+    // And names are labels, not identities: the same name may belong to two records.
+    expect(register).not.toMatch(/NameTaken/);
+    expect(register).toMatch(/if\s*\(_counterparties\[id\]\.status\s*!=\s*CounterpartyStatus\.None\s*\)\s*revert\s+IdTaken/);
   });
 
   it("lets only the business hand the payer side on", () => {

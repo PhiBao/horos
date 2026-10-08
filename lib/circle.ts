@@ -143,12 +143,26 @@ export async function walletBalance(address: `0x${string}`): Promise<bigint> {
  * anything that is not a top-level script. The demo scripts decide how loud they
  * want to be about a failure; this only reports it.
  */
-const SETTLED = new Set(["COMPLETE", "CONFIRMED"]);
+/**
+ * Terminal success is COMPLETE. CONFIRMED is not terminal.
+ *
+ * The old set included both, which contradicted the comment directly above it and
+ * meant a caller could read chain state and submit the next step of a ceremony
+ * against a transaction that was mined but not yet finalised. On a reorg the next
+ * step runs against a state that no longer exists.
+ */
+const SETTLED = new Set(["COMPLETE"]);
+const PENDING = new Set(["QUEUED", "SENT", "CLEARED", "CONFIRMED"]);
 const FAILED = new Set(["FAILED", "DENIED", "CANCELLED"]);
 
 export type SettleResult =
   | {ok: true; state: string; txHash?: `0x${string}`}
   | {ok: false; state: string; reason: string};
+
+/** True while a transaction is still on its way to a terminal state. */
+export function isPending(state: string): boolean {
+  return PENDING.has(state);
+}
 
 export async function settleCircleTransaction(
   client: ReturnType<typeof circleClient>,

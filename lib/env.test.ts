@@ -90,6 +90,30 @@ describe("loadEnv precedence", () => {
     expect(process.env["NOT A VAR"]).toBeUndefined();
   });
 
+  // The docstring promised `#` comments from the first version; the parser did not
+  // deliver them until now, so an operator writing the documented syntax silently got
+  // a credential with a comment glued to the end of it.
+  it("strips an inline comment from an unquoted value", () => {
+    writeFileSync(".env", "HOROS_TEST_VALUE=https://rpc.example/abc # primary endpoint\n");
+    delete process.env.HOROS_TEST_VALUE;
+    loadEnv();
+    expect(process.env.HOROS_TEST_VALUE).toBe("https://rpc.example/abc");
+  });
+
+  it("keeps a # that is inside quotes, because there it is data", () => {
+    writeFileSync(".env", 'HOROS_TEST_VALUE="pass#word"\n');
+    delete process.env.HOROS_TEST_VALUE;
+    loadEnv();
+    expect(process.env.HOROS_TEST_VALUE).toBe("pass#word");
+  });
+
+  it("keeps a # that is part of the value with no space before it", () => {
+    writeFileSync(".env", "HOROS_TEST_VALUE=abc#def\n");
+    delete process.env.HOROS_TEST_VALUE;
+    loadEnv();
+    expect(process.env.HOROS_TEST_VALUE).toBe("abc#def");
+  });
+
   it("does nothing when there is no file at all", () => {
     delete process.env.HOROS_TEST_VALUE;
     expect(() => loadEnv()).not.toThrow();

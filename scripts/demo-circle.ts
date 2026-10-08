@@ -66,10 +66,11 @@ const note = (m: string) => console.log(`      ${m}`);
  * Wait for a Circle transaction to settle.
  *
  * The terminal success state is COMPLETE, not CONFIRMED — CONFIRMED means the
- * transaction is mined but not yet finalised, and polling for it makes a working
- * integration look broken.
+ * transaction is mined but not yet finalised. The set below used to include both,
+ * which contradicted this comment and continued the ceremony against a
+ * transaction a reorg could still take back.
  */
-const SETTLED = new Set(["COMPLETE", "CONFIRMED"]);
+const SETTLED = new Set(["COMPLETE"]);
 const FAILED = new Set(["FAILED", "DENIED", "CANCELLED"]);
 
 async function settle(transactionId: string, label: string): Promise<void> {
@@ -129,12 +130,21 @@ async function main() {
   console.log(`  agent wallet  ${wallet.address}  (Circle id ${wallet.id})`);
   console.log(`  custody       ${wallet.custodyType} — the private key never exists here`);
 
-  // ---- 0. prove the absence ------------------------------------------
-  t("There is no key in this process");
-  if (process.env.HOROS_DEPLOYER_PRIVATE_KEY && !process.env.HOROS_ALLOW_LOCAL_KEY) {
-    note("HOROS_DEPLOYER_PRIVATE_KEY is set, but this script never reads it");
-  }
-  ok("the only signer is Circle's custody layer, reached over HTTPS");
+  // ---- 0. two keys, two jobs, one of them absent ----------------------
+  //
+  // This step used to claim the script "never reads" the local key. That stopped
+  // being true when the payer half began requiring the designated business: the
+  // business signs the attestation, so the script reads the business key. The
+  // claim worth making is narrower and true — the *agent's* key does not exist
+  // here, and Circle signs every transaction the agent submits.
+  t("There is no agent key in this process");
+  const businessKey = process.env.HOROS_DEPLOYER_PRIVATE_KEY;
+  note(
+    businessKey
+      ? "the business key is read, and only to sign the payer half — which the agent cannot sign"
+      : "no business key is set: the payer half will have to come from somewhere else",
+  );
+  ok("the agent's key does not exist here: Circle's custody layer signs every submission");
 
   // ---- 1. fund the vault from the Circle wallet ----------------------
   t("Fund the vault from the agent's own wallet");
@@ -180,7 +190,26 @@ async function main() {
     // The agent submits the registration, but it names the business — it cannot
     // name itself, and naming is the only power registration confers. From here on
     // the payer half of every succession belongs to BUSINESS and nobody else.
-    await execute(dep.registry, registryAbi, "register(string,address,address)", [COUNTERPARTY_NAME, VENDOR, BUSINESS], `register "${COUNTERPARTY_NAME}", business ${BUSINESS.slice(0, 10)}…`);
+    // The vendor consents with its own key. The agent submits, but it cannot open a
+    // record at somebody else's address on its own.
+    const consentDigest = (await client.readContract({
+      address: dep.registry, abi: registryAbi, functionName: "registrationDigest",
+      args: [COUNTERPARTY_NAME, VENDOR, BUSINESS],
+    })) as `0x${string}`;
+    const vendorKeyForConsent = VENDOR_KEY;
+    if (!vendorKeyForConsent) {
+      console.error("\n  HOROS_DEMO_VENDOR_KEY is not set: the vendor must consent to being registered.\n");
+      process.exit(1);
+    }
+    const {privateKeyToAccount: toAccount} = await import("viem/accounts");
+    const consent = await toAccount(vendorKeyForConsent).sign({hash: consentDigest});
+    await execute(
+      dep.registry,
+      registryAbi,
+      "register(string,address,address,bytes)",
+      [COUNTERPARTY_NAME, VENDOR, BUSINESS, consent],
+      `register "${COUNTERPARTY_NAME}", business ${BUSINESS.slice(0, 10)}…`,
+    );
     cpId = (await client.readContract({
       address: dep.registry, abi: registryAbi, functionName: "nameIndex", args: [nameHash],
     })) as `0x${string}`;
@@ -201,6 +230,20 @@ async function main() {
     });
     await client.waitForTransactionReceipt({hash: h});
     ok(`set a 10 USDC budget  ${explorerTx(h)}`);
+  }
+
+  // The agent wallet is the only address allowed to trigger a payment, and the
+  // business key is the only address allowed to name one. That is the split the
+  // demo is about, so it is stated and then enforced onchain.
+  {
+    const h = await getLocalSigner().writeContract({
+      address: dep.vault,
+      abi: vaultAbi,
+      functionName: "setExecutor",
+      args: [wallet.address, true],
+    });
+    await client.waitForTransactionReceipt({hash: h});
+    ok(`only ${wallet.address.slice(0, 10)}… may trigger payments  ${explorerTx(h)}`);
   }
 
   // ---- 3. pay the ordinary invoice ------------------------------------
@@ -354,10 +397,13 @@ async function proposeAndComplete(
   const s = (await client.readContract({
     address: dep.registry, abi: registryAbi, functionName: "succession", args: [sid],
   })) as {counterpartyId: `0x${string}`; id: `0x${string}`; to: `0x${string}`; expiresAt: bigint};
-  const digest = (await client.readContract({
-    address: dep.registry, abi: registryAbi, functionName: "successionDigest",
-    args: [s.counterpartyId, s.id, s.to, s.expiresAt],
-  })) as `0x${string}`;
+  // One digest per role: the signature names the half it fills, so a submitter
+  // cannot take the business's payer signature and spend it as a quorum one.
+  const digestFor = async (role: number): Promise<`0x${string}`> =>
+    (await client.readContract({
+      address: dep.registry, abi: registryAbi, functionName: "successionDigest",
+      args: [s.counterpartyId, s.id, s.to, s.expiresAt, role],
+    })) as `0x${string}`;
 
   const vendorKey = VENDOR_KEY;
   if (!vendorKey) {
@@ -366,20 +412,21 @@ async function proposeAndComplete(
     process.exit(1);
   }
   const {privateKeyToAccount} = await import("viem/accounts");
-  const vendorSig = await privateKeyToAccount(vendorKey).sign({hash: digest});
+  const vendorSig = await privateKeyToAccount(vendorKey).sign({hash: await digestFor(0)});
   await execute(dep.registry, registryAbi, "attest(bytes32,uint8,bytes)", [sid, "0", vendorSig], "attest, by the account that was last paid");
 
   // The payer half of the ceremony is signed by the BUSINESS, with its own key,
   // and submitted through Circle. That is the correct split of authority:
   //
-  //   the agent  (Circle, keyless)  executes payments, sets budgets, can stop
-  //   the business (its own key)   authorises a change of destination
+  //   the agent  (Circle, keyless)  submits transactions; triggers the payment
+  //   the business (its own key)   authorises a change of destination, sets budgets,
+  //                                names the executor, can stop the vault
   //   the vendor  (its own key)    authorises its own new account
   //
   // So the agent cannot move money to a new address even if it is fully
   // compromised and even if it holds every budget. It can only ask.
   const payerSig = await privateKeyToAccount(process.env.HOROS_DEPLOYER_PRIVATE_KEY as `0x${string}`).sign({
-    hash: digest,
+    hash: await digestFor(1),
   });
   await execute(dep.registry, registryAbi, "attest(bytes32,uint8,bytes)", [sid, "1", payerSig], "attest, by the payer");
 

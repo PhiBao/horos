@@ -213,15 +213,19 @@ async function main() {
   })) as `0x${string}`;
 
   if (cpId === "0x0000000000000000000000000000000000000000000000000000000000000000") {
-    // The business is named here, at registration, and nowhere else can name it.
-    // From this call on, the payer half of every succession has exactly one right
-    // answer: this key. A stranger can still register themselves as a payer, but
-    // registration has never granted the payer half.
+    // Two signatures are needed to open a record: the account being registered
+    // consents, and the business names itself. Consent is what stops a stranger
+    // opening this record first and holding the payer half of it before we arrive.
+    const consentDigest = (await client.readContract({
+      address: dep.registry, abi: registryAbi, functionName: "registrationDigest",
+      args: [COUNTERPARTY_NAME, VENDOR, account.address],
+    })) as `0x${string}`;
+    const consent = await signDigest(requireVendorKey(), consentDigest);
     const regHash = await regClient.writeContract({
       address: dep.registry,
       abi: registryAbi,
       functionName: "register",
-      args: [COUNTERPARTY_NAME, VENDOR, account.address],
+      args: [COUNTERPARTY_NAME, VENDOR, account.address, consent],
     });
     await client.waitForTransactionReceipt({hash: regHash});
     cpId = (await client.readContract({
@@ -260,6 +264,12 @@ async function main() {
 
   await send(() => regClient.writeContract({address: dep.vault, abi: vaultAbi, functionName: "setCounterpartyCap", args: [cpId, COUNTERPARTY_CAP]}),
     "set a budget for this counterparty",
+  );
+
+  // Only a named executor (or the owner) may trigger a payment. The agent wallet is
+  // the executor; here the agent *is* this local key, so it names itself.
+  await send(() => regClient.writeContract({address: dep.vault, abi: vaultAbi, functionName: "setExecutor", args: [account.address, true]}),
+    "name the agent as the only executor",
   );
 
   // One-shot: the story is clearer if every run starts from a fresh deployment,
@@ -322,20 +332,22 @@ async function main() {
   const s = (await client.readContract({address: dep.registry, abi: registryAbi, functionName: "succession", args: [succId]})) as {
     counterpartyId: `0x${string}`; id: `0x${string}`; from: `0x${string}`; to: `0x${string}`; expiresAt: bigint;
   };
-  const digest = (await client.readContract({
-    address: dep.registry, abi: registryAbi, functionName: "successionDigest",
-    args: [s.counterpartyId, s.id, s.to, s.expiresAt],
-  })) as `0x${string}`;
+  // The role is inside the digest, so each signature is made for the half it fills.
+  const digestFor = async (role: number): Promise<`0x${string}`> =>
+    (await client.readContract({
+      address: dep.registry, abi: registryAbi, functionName: "successionDigest",
+      args: [s.counterpartyId, s.id, s.to, s.expiresAt, role],
+    })) as `0x${string}`;
 
   // 1. the account that received the last payment
-  const oldSig = await signDigest(requireVendorKey(), digest);
+  const oldSig = await signDigest(requireVendorKey(), await digestFor(0));
   await send(() => regClient.writeContract({address: dep.registry, abi: registryAbi, functionName: "attest", args: [succId, 0, oldSig]}),
     "attested by the account that was last paid",
   );
 
   // The recipient can never be one of its own signatories. Prove it.
   try {
-    const newSig = await signDigest(requireNewKey(), digest);
+    const newSig = await signDigest(requireNewKey(), await digestFor(0));
     await regClient.simulateContract({address: dep.registry, abi: registryAbi, functionName: "attest", args: [succId, 0, newSig]});
     warn("the recipient was able to attest to its own arrival — investigate");
   } catch {
@@ -343,7 +355,7 @@ async function main() {
   }
 
   // 2. the payer
-  const payerSig = await signDigest(pk, digest);
+  const payerSig = await signDigest(pk, await digestFor(1));
   await send(() => regClient.writeContract({address: dep.registry, abi: registryAbi, functionName: "attest", args: [succId, 1, payerSig]}),
     "attested by us, the payer",
   );

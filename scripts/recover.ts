@@ -16,8 +16,12 @@
 import {formatUnits} from "viem";
 import {privateKeyToAccount} from "viem/accounts";
 
+import {loadEnv} from "../lib/env.js";
+
 import {getPublicClient, getLocalSigner, currentNetwork, explorerTx} from "../lib/chain.js";
 import {vaultAbi} from "../lib/abi.js";
+
+loadEnv();
 
 async function main(): Promise<void> {
   const vault = process.argv[2] as `0x${string}` | undefined;
@@ -28,7 +32,10 @@ async function main(): Promise<void> {
 
   const key = process.env.HOROS_DEPLOYER_PRIVATE_KEY as `0x${string}` | undefined;
   if (!key) {
-    console.error("\n  HOROS_DEPLOYER_PRIVATE_KEY is not set. Recovery signs with the business key.\n");
+    console.error(
+      "\n  HOROS_DEPLOYER_PRIVATE_KEY is not set. Recovery signs with the business key.\n" +
+        "  It is read from the shell, .env.local, or .env — in that order.\n",
+    );
     process.exit(1);
   }
   const business = privateKeyToAccount(key);

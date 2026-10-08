@@ -25,7 +25,7 @@ verdict and every reason behind it. No account, no key, and the page cannot move
 money.
 
 **The record it acts on:** [a counterparty that has been through the
-ceremony](https://horos.kiter0211.workers.dev/c/0xf85f374f0e39541527bc02e3a90ff684a86c9a099d8db994e09d94be651da9b6)
+ceremony](https://horos.kiter0211.workers.dev/c/0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d)
 — two accounts, one of them a successor with two signatures behind it, all of it
 read from Arc. The three sample invoices on the decision card resolve to
 **RELEASE / HOLD / RELEASE** against this record.
@@ -165,8 +165,11 @@ anyone else standing in for the business. The payer half belongs to exactly one
 address, named at registration and transferable only by itself.
 
 ```
-register(name, firstAccount, business)   ← the business is named here, once
-        │
+register(name, firstAccount, business, consent)
+        │                  ▲                ▲
+        │                  │                └ the business names itself, once
+        │                  └ the account consents, with its own key
+        ▼
 proposeSuccession(id, to, window)
         │
         ├─ attest(OldKey)   signed by the account that received the last payment
@@ -175,6 +178,10 @@ proposeSuccession(id, to, window)
         │
      activate()   ──► the new account is now active
 ```
+
+Both signatures are made against a digest that names the role they fill, and one
+key counts once per proposal. A submitter can therefore neither re-role a captured
+signature nor satisfy the quorum demand with the business's own key.
 
 This used to say "a registered payer", and registration is permissionless — so
 any stranger could register and countersign their own redirect, and a single
@@ -185,9 +192,13 @@ the adversarial tests assert the stranger's signature reverts.
 
 Properties the test suite asserts, most of which are *negations*:
 
+- an account cannot be registered without its own key's consent
 - an account cannot change without the old key's signature
 - the old key alone still gets nowhere
 - the business alone still gets nowhere
+- a proposal cannot be activated out of order — a second, fully-signed move to an
+  address the *current* account never agreed to is rejected as stale
+- a break disclosed while a proposal is in flight stops that proposal too
 - a registered stranger's payer signature reverts — registration grants proposing
   and quorum-attesting, never the payer half
 - the proposed recipient cannot sign for its own arrival, in any role
@@ -214,7 +225,7 @@ lineage is not a system.
 
 | Party | Key | Can do | Cannot do |
 |---|---|---|---|
-| **Agent** | none — Circle holds it | execute payments to the recorded account, submit others' signatures | authorise anything, set budgets, stop the vault, withdraw |
+| **Agent** | none — Circle holds it | trigger payments to the recorded account, submit others' signatures | authorise anything, set budgets, stop the vault, withdraw, pay anyone but the recorded account |
 | **Business** | its own | authorise a change of destination, set budgets, stop the vault, recover funds | pay a non-active account |
 | **Vendor** | its own | authorise its own new account | sign for itself as a payer or a recipient |
 
@@ -233,11 +244,45 @@ agent holding the owner role could drain the vault in one call while "it can onl
 ask" sat in this file.
 
 So the owner is a business-held key, and never the agent wallet — not by policy,
-by deployment, verifiable onchain. The agent executes payments and submits other
-parties' signatures. It sets no budgets, stops nothing, withdraws nothing. A fully
+by deployment, verifiable onchain. The agent triggers payments and submits other
+parties' signatures. It sets no budgets, stops nothing, withdraws nothing.
+
+And it is the *only* address that can trigger a payment. `pay()` checks an
+executor allowlist the owner controls; before that check existed, any stranger
+could push the vault's whole balance to the recorded counterparty one cap-sized
+payment at a time. The cap bounded each payment; nothing bounded the total. A fully
 compromised agent, holding the Circle credentials that sign whatever it submits,
 still cannot send money anywhere `pay()` does not already resolve to — which is
 the recorded account and nothing else. *Now* it can only ask.
+
+### It was audited, and the audit changed it
+
+Four adversarial hunters ran against this code — access control, economics, the
+web surface, and deployment — plus a validation pass. Eleven findings were real and
+are fixed; each fix has a regression test that fails when the guard is removed.
+
+The two that mattered were claims this repository made about itself:
+
+- **Registration was first-to-type, not first-to-pay.** `register()` never checked
+  for payment, so a stranger could open the record at someone else's address and
+  hold the payer half of it. The account now consents with its own signature, and
+  names must share — a name is a label, the id is the identity.
+- **A stale proposal could move an account twice.** Two fully-signed proposals
+  activated in whatever order a submitter chose, so a signature could authorise a
+  move the middle address never agreed to. `attest` and `activate` now both require
+  the proposal to be against the account that is *currently* active.
+
+Also fixed: a break disclosed mid-ceremony no longer leaves a proposal alive; the
+vault has an executor allowlist, so "the agent triggers payments" is now a property
+of the code rather than a description of who usually calls it; and a signed
+attestation names the role it is for, so a captured signature cannot be re-roled
+to stall a rotation.
+
+[`docs/AUDIT-2026-10-08.md`](docs/AUDIT-2026-10-08.md) is the full record,
+including what was checked and held, and what was **deliberately not fixed** with
+the reason — a permissionless `registerPayer`, an O(n) `isPayable` with its
+measured gas, unilateral disclosure, and a rate limiter that is honest about being
+permissive.
 
 ### Reading the invoice is the hard part
 
