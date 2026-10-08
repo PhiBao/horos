@@ -19,15 +19,25 @@ const STORAGE_KEY = "horos.network";
 let networks = [];
 let current = null;
 
-/** Which chains this deployment can read, and where their records are. */
-export async function initNetwork() {
+/**
+ * Which chains this deployment can read, and where their records are.
+ *
+ * `prefer` is for a page whose own copy is about one chain: `/start` is the testnet
+ * pilot and opens on testnet, because a page that says "the money is test money" under
+ * a header saying "real USDC" contradicts itself in the first two lines. An explicit
+ * `?network=` still wins, and the reader's remembered choice still applies everywhere
+ * else - the pilot page is the only one that asserts a chain rather than asking.
+ */
+export async function initNetwork({prefer} = {}) {
   try {
     const res = await fetch("/api/networks");
     if (!res.ok) throw new Error(`networks list failed (${res.status})`);
     const data = await res.json();
     networks = Array.isArray(data.networks) ? data.networks : [];
+    const fromUrl = new URLSearchParams(location.search).get("network");
     const wanted =
-      new URLSearchParams(location.search).get("network") ??
+      fromUrl ??
+      (prefer && networks.some((n) => n.key === prefer) ? prefer : null) ??
       localStorage.getItem(STORAGE_KEY) ??
       data.default;
     current = networks.find((n) => n.key === wanted) ?? networks.find((n) => n.key === data.default) ?? networks[0] ?? null;

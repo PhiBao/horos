@@ -158,7 +158,10 @@
     if (note) note.textContent = NOTES[networkKey()] ?? NOTES["arc-testnet"];
   }
 
-  await initNetwork();
+  // The pilot is the testnet pilot, and this page is the one that says so. It opens on
+  // the chain its own first paragraph describes; the picker is still there for anyone
+  // who wants to look at the mainnet records instead.
+  await initNetwork({prefer: "arc-testnet"});
   mountPicker(document.querySelector("#network"), refresh);
   refresh();
 </script>
