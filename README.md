@@ -530,7 +530,9 @@ Things that are real, and things that are not.
 
 - **traction.** No business has run an invoice through this yet. The mainnet ceremony
   and its payments are our own, at demonstration amounts. That is the honest number,
-  and it is the one a judge should weigh.
+  and it is the one a judge should weigh. The pilot is open, free, and on testnet:
+  <https://horos.kiter0211.workers.dev/start>, or email
+  <kiter2509@gmail.com> with three lines about a vendor.
 - **screening is unavailable.** [`lib/screening.ts`](lib/screening.ts) reports
   `unavailable` and the policy blocks on it, unless a person has explicitly waived
   screening. A waiver can never hide an actual hit. Both behaviours are tested; the

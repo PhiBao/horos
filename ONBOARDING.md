@@ -6,6 +6,11 @@ whether the refusal is useful to you.
 
 **Time it takes you: about ten minutes.** Two of those are a phone call.
 
+**To start: email [kiter2509@gmail.com](mailto:kiter2509@gmail.com?subject=Horos%20pilot%20-%20one%20invoice)
+with three lines — the vendor's name as it appears on their invoices, the address you pay them at
+(only if that is USDC), and roughly what a typical invoice is for.** That is the whole intake, and
+everything after it is us.
+
 ---
 
 ## What we are asking

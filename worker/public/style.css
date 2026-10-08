@@ -141,6 +141,9 @@ button.primary-ghost:hover { background: #2ea04318; color: #a7f3c4; }
 
 .block { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
 .block h3:first-child { margin-top: 0; }
+/* The pilot's call to action. Louder than the blocks around it on purpose: the page
+   asks a business for an invoice, and before this it never said where to send one. */
+#start-here { border-left: 3px solid #2ea04399; }
 
 /* ---- reason list ---- */
 .reasons { list-style: none; margin: 0; padding: 0; }
