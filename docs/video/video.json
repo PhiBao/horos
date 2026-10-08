@@ -1,0 +1,43 @@
+{
+  "name": "horos",
+  "output": "out/horos-demo.mp4",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "voice": "en-US-GuyNeural",
+  "rate": "-4%",
+  "volume": "+0%",
+  "pad": 0.45,
+  "trim": 0.6,
+  "crf": 20,
+  "preset": "medium",
+  "burn_subtitles": true,
+  "loudness": "I=-16:TP=-1.5:LRA=11",
+  "subtitle_style": "FontName=DejaVu Sans,FontSize=30,PrimaryColour=&HFFFFFF,BackColour=&H40000000,BorderStyle=3,Outline=1,Shadow=0,MarginV=40,PlayResX=1920,PlayResY=1080",
+  "theme": {
+    "bg": "#0b0d12",
+    "accent1": "#eb6c36",
+    "accent2": "#f0a061",
+    "accent3": "#4f5d75",
+    "ink": "#e6e9ef",
+    "muted": "#99a1b3",
+    "faint": "#6b7387",
+    "hi": "#d29922",
+    "hi2": "#2ea043",
+    "glow1": "rgba(235,108,54,.16)",
+    "glow2": "rgba(240,160,97,.12)",
+    "glow3": "rgba(79,93,117,.14)",
+    "subc": "#eb6c36"
+  },
+  "branding": {
+    "name": "HOROS",
+    "tagline": "A CHANGE OF PAYMENT ADDRESS IS A CEREMONY, NOT A FIELD UPDATE",
+    "sub": "An agent that pays a business's invoices on Arc, and will not send USDC to an address it cannot prove is the counterparty it already paid.",
+    "note": "Live on Arc mainnet in real USDC &middot; settled on Circle's stablecoin-native L1",
+    "meta": "Tameion Agents Hackathon &middot; Canteen &times; Circle &times; Arc",
+    "kicker": "TAMEION &middot; AGENTS THAT HOLD A BUSINESS'S MONEY",
+    "headline": "<b>The refusal is the product.</b><br><i>Not a filter that reads the invoice &mdash; a contract that cannot be told.</i>",
+    "links": "horos-mainnet.kiter0211.workers.dev &nbsp;&middot;&nbsp; github.com/PhiBao/horos",
+    "footnote": "Real USDC on Arc mainnet &middot; 57 contract tests, 104 unit tests &middot; MIT"
+  }
+}

@@ -15,9 +15,11 @@
 
 import {formatUnits} from "viem";
 
+import {loadEnv} from "../lib/env.js";
 import {getPublicClient, currentNetwork, explorerAddress, formatUsdc} from "../lib/chain.js";
 import {registryAbi, vaultAbi, getDeployment} from "../lib/abi.js";
 import {labelStatus, labelSuccessionState} from "../lib/enums.js";
+import type {NetworkKey} from "../lib/chain.js";
 
 const short = (a: string) => (a && a.length > 14 ? `${a.slice(0, 10)}…${a.slice(-6)}` : a);
 
@@ -29,12 +31,23 @@ const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
 async function main(): Promise<void> {
   const client = getPublicClient();
   const dep = getDeployment();
+
+  /**
+   * The chain to describe, taken from the deployment rather than from the shell.
+   *
+   * This printed "arc-testnet · chainId 5042" against the mainnet deployment: the
+   * label came from currentNetwork() and the id from deployment.json, so the header
+   * contradicted itself and every explorer link pointed at the wrong chain. A script
+   * whose whole purpose is "check it yourself" cannot read the deployment from one
+   * source and the chain from another.
+   */
+  const key = dep.network as NetworkKey;
   const wanted = process.argv[2] as `0x${string}` | undefined;
 
   console.log(`\n${bold("  HOROS")}  — what the chain says, read with no key and no API`);
-  console.log(dim(`  ${currentNetwork()} · chainId ${dep.chainId}`));
-  console.log(dim(`  registry  ${explorerAddress(dep.registry)}`));
-  console.log(dim(`  vault     ${explorerAddress(dep.vault)}`));
+  console.log(dim(`  ${dep.network} · chainId ${dep.chainId}`));
+  console.log(dim(`  registry  ${explorerAddress(dep.registry, key)}`));
+  console.log(dim(`  vault     ${explorerAddress(dep.vault, key)}`));
 
   // ---- the registry cannot be edited by its owner ---------------------------
   // Worth showing first, because it is the load-bearing claim: the owner key can
@@ -186,6 +199,8 @@ async function main(): Promise<void> {
 }
 
 
+
+loadEnv();
 
 main().catch((err: unknown) => {
   console.error(`\n  ${err instanceof Error ? err.message : String(err)}\n`);

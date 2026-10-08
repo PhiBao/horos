@@ -33,11 +33,11 @@
     "check:pages": "tsx scripts/check-pages.ts",
     "verify": "tsx scripts/verify.ts",
     "capture": "tsx scripts/capture.ts",
-    "video": "tsx scripts/video.ts",
     "sync:site:mainnet": "tsx scripts/sync-worker-config.ts arc-mainnet",
     "site:deploy:mainnet": "wrangler deploy --config wrangler.mainnet.jsonc --env-file worker/empty.env",
     "site:dev:mainnet": "wrangler dev --config wrangler.mainnet.jsonc --port 8788 --ip 127.0.0.1",
-    "deploy:mainnet": "HOROS_NETWORK=arc-mainnet tsx scripts/deploy.ts"
+    "deploy:mainnet": "HOROS_NETWORK=arc-mainnet tsx scripts/deploy.ts",
+    "sweep": "tsx scripts/sweep.ts"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^4.6.0",

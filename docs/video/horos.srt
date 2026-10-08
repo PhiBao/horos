@@ -1,0 +1,132 @@
+1
+00:00:00,100 --> 00:00:03,201
+A business pays a supplier for years.
+
+2
+00:00:03,150 --> 00:00:06,769
+Then one email says the bank details have changed.
+
+3
+00:00:06,769 --> 00:00:12,877
+Horos is an agent that pays invoices on Arc, and it cannot be talked
+into paying that new address.
+
+4
+00:00:12,877 --> 00:00:19,347
+Not because it spots the lie, but because naming a destination is not
+something the contract can be asked to do.
+
+5
+00:00:19,970 --> 00:00:27,120
+Business email compromise cost three point zero four billion dollars
+last year, across twenty four thousand incidents.
+
+6
+00:00:27,070 --> 00:00:31,067
+The usual control is to phone the supplier and confirm.
+
+7
+00:00:31,067 --> 00:00:38,893
+That control is now under attack: deepfake voice and video
+impersonation of vendors was measured for the first time in twenty
+
+8
+00:00:38,893 --> 00:00:46,614
+Every channel a business uses to learn a new address can be
+synthesised, so Horos does not try to tell a real voice from a fake
+
+9
+00:00:47,230 --> 00:00:52,375
+Here is the entire safety argument, and it fits in one function
+signature.
+
+10
+00:00:52,325 --> 00:00:56,674
+pay takes a counterparty id, an amount, and a reference.
+
+11
+00:00:56,674 --> 00:00:59,225
+There is no to parameter.
+
+12
+00:00:59,225 --> 00:01:02,559
+The caller names who to pay, never where.
+
+13
+00:01:02,559 --> 00:01:11,686
+The destination is read from a registry, and the only way an address
+becomes a counterparty's active account is a ceremony the recipient
+
+14
+00:01:12,299 --> 00:01:17,210
+This is the live deployment on Arc mainnet, reading real USDC.
+
+15
+00:01:17,159 --> 00:01:22,159
+A routine invoice releases: the address is the one already on record.
+
+16
+00:01:22,159 --> 00:01:29,114
+Now one arrives from the same supplier, with a changed account,
+urgency, and an instruction not to verify.
+
+17
+00:01:29,114 --> 00:01:34,009
+The policy holds it, and it names the sentence that gave the document
+away.
+
+18
+00:01:34,609 --> 00:01:39,234
+When a supplier genuinely changes accounts, that is a ceremony.
+
+19
+00:01:39,184 --> 00:01:42,895
+The account that was last paid agrees to be replaced.
+
+20
+00:01:42,895 --> 00:01:48,155
+The business agrees, with a key named at registration that nobody else
+can use.
+
+21
+00:01:48,155 --> 00:01:51,801
+The new account can never sign for its own arrival.
+
+22
+00:01:51,801 --> 00:01:57,179
+The lineage is public, and it is not editable: every entry is a
+transaction.
+
+23
+00:01:57,789 --> 00:02:01,072
+None of that requires trusting the website.
+
+24
+00:02:01,022 --> 00:02:05,840
+This reads the deployment straight from the chain, with no key and no
+API.
+
+25
+00:02:05,840 --> 00:02:11,114
+Two accounts, the second replacing the first, with two signatures
+behind it.
+
+26
+00:02:11,114 --> 00:02:18,118
+And the interface, checked rather than asserted: pay takes a
+counterparty id, and has no address parameter.
+
+27
+00:02:18,739 --> 00:02:25,173
+Horos is live on Arc mainnet, and that record was made by a real
+ceremony in real USDC.
+
+28
+00:02:25,123 --> 00:02:33,157
+The repository has the contracts, an adversarial audit with every fix
+behind a test, and the same policy the deployed site runs.
+
+29
+00:02:33,157 --> 00:02:35,762
+The refusal is the product.
+

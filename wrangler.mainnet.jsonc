@@ -48,14 +48,14 @@
     "HOROS_NETWORK": "arc-mainnet",
 
     // The live testnet deployment, from deployment.json.
-    "REGISTRY_ADDRESS": "0x0000000000000000000000000000000000000000",
-    "VAULT_ADDRESS": "0x0000000000000000000000000000000000000000",
+    "REGISTRY_ADDRESS": "0x570855732f47b24ef6f9a42024e05c9ca0c7f63c",
+    "VAULT_ADDRESS": "0x1879a1bc80fdc97375abc7476152c3956fd48e5f",
 
     // Counterparties the scheduled check looks at, comma-separated. Empty means
     // the loop runs and reports that it watches nothing — a cron that silently
     // watches an empty list is how supervision evaporates, so the emptiness is
     // reported rather than assumed.
-    "WATCH_IDS": ""
+    "WATCH_IDS": "0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b"
   },
 
   // The decision endpoint spends money per request (chain reads plus a paid judgment

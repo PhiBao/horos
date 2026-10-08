@@ -1,0 +1,295 @@
+{
+  "voice": "en-US-GuyNeural",
+  "segments": [
+    {
+      "id": "s1_hook",
+      "text": "A business pays a supplier for years. Then one email says the bank details have changed. Horos is an agent that pays invoices on Arc, and it cannot be talked into paying that new address. Not because it spots the lie, but because naming a destination is not something the contract can be asked to do.",
+      "scene": {
+        "kind": "card",
+        "template": "title-left"
+      }
+    },
+    {
+      "id": "s2_problem",
+      "text": "Business email compromise cost three point zero four billion dollars last year, across twenty four thousand incidents. The usual control is to phone the supplier and confirm. That control is now under attack: deepfake voice and video impersonation of vendors was measured for the first time in twenty twenty six. Every channel a business uses to learn a new address can be synthesised, so Horos does not try to tell a real voice from a fake one.",
+      "scene": {
+        "kind": "card",
+        "template": "title-left",
+        "vars": {
+          "kicker": "THE ATTACK IS ONE SENTENCE LONG",
+          "name": "OUR BANK DETAILS HAVE CHANGED",
+          "tagline": "Three point zero four billion dollars, twenty four thousand incidents",
+          "sub": "The standard control is to phone the vendor and confirm. As of 2026 that control is itself attacked &mdash; deepfake voice and video impersonation of vendors was measured for the first time.",
+          "note": "Every channel a business uses to learn a new address can now be synthesised.",
+          "meta": "So this does not try to detect the lie"
+        }
+      }
+    },
+    {
+      "id": "s3_rule",
+      "text": "Here is the entire safety argument, and it fits in one function signature. pay takes a counterparty id, an amount, and a reference. There is no to parameter. The caller names who to pay, never where. The destination is read from a registry, and the only way an address becomes a counterparty's active account is a ceremony the recipient cannot complete alone.",
+      "scene": {
+        "kind": "term",
+        "title": "CustodyVault.sol \u2014 the only payment path",
+        "lines": [
+          {
+            "at": 0.5,
+            "type": "cmd",
+            "text": "grep -A 8 'The only payment path' contracts/src/CustodyVault.sol",
+            "cps": 26
+          },
+          {
+            "at": 3.4,
+            "text": "     * @notice Pay a counterparty. The destination is not a parameter.",
+            "cls": "dim"
+          },
+          {
+            "at": 4.6,
+            "text": "     * @param counterpartyId  who to pay",
+            "cls": "dim"
+          },
+          {
+            "at": 5.6,
+            "text": "     * @param amount          how much, in USDC base units",
+            "cls": "dim"
+          },
+          {
+            "at": 6.6,
+            "text": "     * @param ref             a unique reference; replaying it reverts",
+            "cls": "dim"
+          },
+          {
+            "at": 7.8,
+            "text": "     */",
+            "cls": "dim"
+          },
+          {
+            "at": 8.4,
+            "text": "    function pay(bytes32 counterpartyId, uint256 amount, bytes32 ref)",
+            "cls": "cy"
+          },
+          {
+            "at": 10.0,
+            "text": "        external returns (address account)",
+            "cls": "cy"
+          },
+          {
+            "at": 11.4,
+            "type": "gap"
+          },
+          {
+            "at": 12.0,
+            "text": "no `to` parameter \u2014 the caller cannot name a destination",
+            "cls": "green"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s4_refusal",
+      "text": "This is the live deployment on Arc mainnet, reading real USDC. A routine invoice releases: the address is the one already on record. Now one arrives from the same supplier, with a changed account, urgency, and an instruction not to verify. The policy holds it, and it names the sentence that gave the document away.",
+      "scene": {
+        "kind": "page",
+        "src": "https://horos-mainnet.kiter0211.workers.dev/?cp=0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b",
+        "zoom": 1.5,
+        "wait_for": [
+          "text=Known:"
+        ],
+        "settle": 0.8,
+        "actions": [
+          {
+            "action": "click",
+            "sel": "[data-sample=\"ordinary\"]",
+            "glide": 0.25,
+            "after": 0.25
+          },
+          {
+            "action": "click",
+            "sel": "#go",
+            "glide": 0.25,
+            "after": 0.3,
+            "wait_for": [
+              ".verdict"
+            ]
+          },
+          {
+            "action": "wait",
+            "sec": 1.0
+          },
+          {
+            "action": "click",
+            "sel": "[data-sample=\"attack\"]",
+            "glide": 0.25,
+            "after": 0.25
+          },
+          {
+            "action": "click",
+            "sel": "#go",
+            "glide": 0.25,
+            "after": 0.3,
+            "wait_for": [
+              "text=HOLD"
+            ]
+          },
+          {
+            "action": "scrollTo",
+            "dur": 1.0,
+            "after": 1.0,
+            "sel": "[data-block=\"reasons\"]",
+            "at": 0.1
+          }
+        ],
+        "hold": 0.4
+      }
+    },
+    {
+      "id": "s5_record",
+      "text": "When a supplier genuinely changes accounts, that is a ceremony. The account that was last paid agrees to be replaced. The business agrees, with a key named at registration that nobody else can use. The new account can never sign for its own arrival. The lineage is public, and it is not editable: every entry is a transaction.",
+      "scene": {
+        "kind": "page",
+        "src": "https://horos-mainnet.kiter0211.workers.dev/c/0xe1d1cd45a2d4fa29a9568d2bf5435b25153a55a70d200456c68199a0abbee07b",
+        "zoom": 1.5,
+        "wait_for": [
+          ".lineage li"
+        ],
+        "settle": 0.7,
+        "actions": [
+          {
+            "action": "scrollTo",
+            "dur": 1.1,
+            "after": 1.4,
+            "y": 0.1
+          },
+          {
+            "action": "scrollTo",
+            "dur": 1.2,
+            "after": 2.0,
+            "sel": "[data-block=\"succession\"]",
+            "at": 0.06
+          },
+          {
+            "action": "wait",
+            "sec": 2.6
+          },
+          {
+            "action": "scrollTo",
+            "dur": 1.1,
+            "after": 2.2,
+            "sel": "[data-block=\"facts\"]",
+            "at": 0.08
+          }
+        ],
+        "hold": 0.8
+      }
+    },
+    {
+      "id": "s6_proof",
+      "text": "None of that requires trusting the website. This reads the deployment straight from the chain, with no key and no API. Two accounts, the second replacing the first, with two signatures behind it. And the interface, checked rather than asserted: pay takes a counterparty id, and has no address parameter.",
+      "scene": {
+        "kind": "term",
+        "title": "pnpm verify \u2014 the deployment, read from Arc mainnet",
+        "lines": [
+          {
+            "at": 0.5,
+            "type": "cmd",
+            "text": "pnpm verify",
+            "cps": 14
+          },
+          {
+            "at": 2.0,
+            "text": "  arc-mainnet \u00b7 chainId 5042",
+            "cls": "dim"
+          },
+          {
+            "at": 2.8,
+            "text": "  registry  https://explorer.arc.io/address/0x5708\u2026",
+            "cls": "dim"
+          },
+          {
+            "at": 4.0,
+            "text": "  The counterparty",
+            "cls": "white"
+          },
+          {
+            "at": 4.6,
+            "text": "    status    Clean",
+            "cls": "white"
+          },
+          {
+            "at": 5.2,
+            "text": "    payable   yes  pay() resolves to the account below, and to nothing else",
+            "cls": "green"
+          },
+          {
+            "at": 6.4,
+            "text": "  Every account it has been paid at",
+            "cls": "white"
+          },
+          {
+            "at": 7.0,
+            "text": "    1. 0x15AB\u2026AC4B   opened by payment evidence",
+            "cls": "dim"
+          },
+          {
+            "at": 8.0,
+            "text": "    2. 0x4AB5\u2026E555   2 signatures \u00b7 replaced 0x15AB\u202685\u2026",
+            "cls": "white"
+          },
+          {
+            "at": 9.6,
+            "text": "  The ceremonies, with both signatures named",
+            "cls": "white"
+          },
+          {
+            "at": 10.2,
+            "text": "    Activated  \u2192  0x4AB5\u2026E555",
+            "cls": "white"
+          },
+          {
+            "at": 10.9,
+            "text": "      \u2713 the account that was last paid, agreeing to be replaced",
+            "cls": "green"
+          },
+          {
+            "at": 12.0,
+            "text": "      \u2713 the business, authorising the change",
+            "cls": "green"
+          },
+          {
+            "at": 13.0,
+            "text": "      the recipient cannot supply either one",
+            "cls": "dim"
+          },
+          {
+            "at": 14.2,
+            "type": "gap"
+          },
+          {
+            "at": 14.8,
+            "text": "    \u2713 pay an address of the caller's choosing",
+            "cls": "green",
+            "flash": "g"
+          },
+          {
+            "at": 15.6,
+            "text": "      pay(bytes32,uint256,bytes32) has no address parameter.",
+            "cls": "dim"
+          },
+          {
+            "at": 16.6,
+            "text": "      The refusal is the signature, not a check that ran.",
+            "cls": "dim"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s7_close",
+      "text": "Horos is live on Arc mainnet, and that record was made by a real ceremony in real USDC. The repository has the contracts, an adversarial audit with every fix behind a test, and the same policy the deployed site runs. The refusal is the product.",
+      "scene": {
+        "kind": "card",
+        "template": "close-left"
+      }
+    }
+  ]
+}

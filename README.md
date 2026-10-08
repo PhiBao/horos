@@ -20,44 +20,51 @@ pay, never *where*. The destination is resolved from the registry, and the only
 way an address becomes a counterparty's active account is a succession ceremony
 that the recipient cannot complete on its own.
 
-**Try it:** <https://horos.kiter0211.workers.dev> — paste an invoice, get the
+**Two live deployments, and they differ in one way that matters.**
+
+| | Link | What it is |
+|---|---|---|
+| **Mainnet** | <https://horos-mainnet.kiter0211.workers.dev> | Real USDC. The ceremony below was performed on Arc mainnet and every transaction is on the explorer. |
+| **Testnet** | <https://horos.kiter0211.workers.dev> | Free to use, and **keyless** — Circle holds the only key. |
+
+Both deployments are recorded: [`deployments/arc-mainnet.json`](deployments/arc-mainnet.json)
+and [`deployments/arc-testnet.json`](deployments/arc-testnet.json). The mainnet vault
+has since been swept back to its owner — the ceremony is on the explorer, and a
+vault with no funds simply cannot pay.
+
+On mainnet the agent signs with a local key, because Circle's mainnet access needs a
+production account this project does not have. On testnet there is no key in the
+process at all. The contracts, the policy and the refusal are identical on both; the
+custody section below states exactly which claim changes and which does not.
+
+**Try it:** <https://horos-mainnet.kiter0211.workers.dev> — paste an invoice, get the
 verdict and every reason behind it. No account, no key, and the page cannot move
 money.
 
 **The record it acts on:** [a counterparty that has been through the
-ceremony](https://horos.kiter0211.workers.dev/c/0xd089b3475da02e89995747482c11f095f6b8c38cf7adb22556d9451f4fee5d5d)
+ceremony](https://horos-mainnet.kiter0211.workers.dev/c/0x2fe51427a51120cf806df0c0efb3931b5b97cb5ec835d6d36190dd2d8f7edda7)
 — two accounts, one of them a successor with two signatures behind it, all of it
 read from Arc. The three sample invoices on the decision card resolve to
 **RELEASE / HOLD / RELEASE** against this record.
 
 ## The demo, in two and a half minutes
 
-**[`video/horos-demo.mp4`](video/horos-demo.mp4)** — silent, captioned, no mock-ups.
-Every frame is either the deployed site driven by a real browser or the actual
-output of a script reading Arc. The video is built from those two things rather
-than recorded, because there is no desktop here, and because a pipeline that
-re-renders from the live system cannot drift away from it.
+**[`video/horos-demo.mp4`](video/horos-demo.mp4)** — 2:36, narrated and subtitled,
+1920×1080. Seven segments: the hook, the problem, the interface rule, the live
+refusal on Arc mainnet, the public record, the chain read, and the close.
 
-It is committed rather than linked. A link to a build artefact is a link that rots,
-and this one is a submission requirement.
+Every number, address and transaction in it exists in this repository or on the
+chain. Nothing is illustrated.
 
-What it covers, in order: the attack in one sentence, the signature that makes the
-refusal structural, the deployed decision card releasing a routine invoice,
-refusing a redirected one and naming all six reasons, the four calibrated
-probabilities and the threshold that acts on them, the public record of a genuine
-two-signature change of account, and the chain's own account of that ceremony read
-back with no key and no API.
+It is **generated, not screen-recorded** — narration from edge-tts, scenes captured
+from a real browser driving the live mainnet site, assembly from ffmpeg. The script
+is [`docs/video/story.json`](docs/video/story.json), so the video can be rebuilt
+from this repository rather than re-performed, and
+[`docs/VIDEO.md`](docs/VIDEO.md) says how.
 
-Rebuild it with:
-
-```bash
-pnpm capture     # drive the deployed site, save the frames the video uses
-pnpm verify > .video/verify.txt   # the transcript the terminal scenes render
-pnpm video       # render, encode, and refuse to exceed three minutes
-```
-
-`pnpm video` fails rather than warns if the total goes past 180 seconds. The limit
-belongs to the brief, not to us, so it is not a number to raise.
+Building it found a bug the test suite could not: the mainnet site was still
+pointing at the previous deployment, so its record page rendered an empty
+counterparty. The screen recording is what caught it.
 
 ---
 

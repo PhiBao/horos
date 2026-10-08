@@ -196,8 +196,23 @@ async function deploy() {
     `NEXT_PUBLIC_HOROS_CHAIN_ID=${chain.id}`,
     `NEXT_PUBLIC_HOROS_NETWORK=${network}`,
   ].join("\n");
-  writeFileSync(resolve(process.cwd(), ".env.deployed"), out + "\n");
   appendToEnvLocal(out);
+
+  // Both deployments stay on disk, because both chains stay live: testnet is the
+  // demo anyone can try without spending anything, mainnet is the record that cost
+  // real USDC. A single deployment.json would erase the testnet site's addresses
+  // the moment mainnet deployed, and sync-worker-config reads these per network.
+  mkdirSync(resolve(process.cwd(), "deployments"), {recursive: true});
+  const perNetwork = resolve(process.cwd(), "deployments", `${network}.json`);
+  writeFileSync(perNetwork, JSON.stringify(deployment, null, 2) + "\n");
+
+  // The message names the files, so it is written from what was actually written.
+  // The previous version announced deployments/<network>.json while the code only
+  // wrote deployment.json: the write had been added to the message and not to the
+  // function, which is a false claim printed by the thing that makes claims true.
+  if (!existsSync(perNetwork)) {
+    throw new Error(`deployment record was not written to ${perNetwork}`);
+  }
 
   console.log(
     `\n  wrote deployments/${network}.json (per network), deployment.json (the latest),\n` +

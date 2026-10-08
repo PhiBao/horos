@@ -108,6 +108,23 @@ throws before it sends anything. An unknown `HOROS_NETWORK` throws too, because 
 site that reads testnet while its configuration says mainnet shows numbers that look
 real and are not.
 
+## After a run
+
+The vaults were swept back to the owner once the ceremony was recorded, so the
+mainnet site now reports a vault balance of zero. That is honest and it changes
+nothing about the record: the ceremony, the two signatures and both payments are
+transactions and they stay on the explorer. A vault with no funds simply cannot pay,
+which is the correct state for a read-only demonstration.
+
+```bash
+pnpm sweep 0x<destination> 0x<vault> [0x<vault> ...]
+```
+
+That withdraws from each vault (owner-only, and it refuses a vault whose owner is
+not the configured key), then sends the wallet balance on. It keeps a small gas
+float, because on Arc USDC is the gas token and a transfer that sends everything
+leaves nothing to pay for itself.
+
 ## If something is wrong
 
 The vault owner can withdraw the whole balance at any time:
