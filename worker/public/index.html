@@ -114,6 +114,14 @@
       <code>lib/policy.ts</code> from the repository, the same file the unit tests run
       against, so the deployed site and the test suite cannot disagree.
     </p>
+    <p>
+      That is why there is no <em>Connect Wallet</em> button, and the absence is the
+      argument rather than an omission. A wallet on this page could only ever be asked to
+      approve a payment by hand — the exact step this design exists to remove. Every
+      signature a person gives in Horos is a transaction against the contracts: half of a
+      change of account, or an owner's cap, pause or withdrawal. None of them is a
+      destination, and none of them is relayed through a web page.
+    </p>
     <p class="foot">
       <a href="https://github.com/PhiBao/horos">Source</a> ·
       <a data-explorer-link>Arc explorer</a> ·
