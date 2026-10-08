@@ -12,7 +12,8 @@
  */
 const $ = (sel) => document.querySelector(sel);
 
-const EXPLORER = "https://explorer.testnet.arc.io";
+/** Set from the API response: the page describes a chain it does not choose. */
+let EXPLORER = "https://explorer.testnet.arc.io";
 
 /** Shorten an address for display without losing the ends, which is where diffs show. */
 const short = (a) => (a && a.length > 12 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a);
@@ -27,6 +28,7 @@ function idFromPath() {
 
 function render(data) {
   const cp = data.counterparty;
+  EXPLORER = data.chain?.explorer ?? EXPLORER;
   const el = $("#record");
   el.hidden = false;
 

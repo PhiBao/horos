@@ -9,12 +9,73 @@
 export {POLICY_VERSION} from "../../lib/policy.js";
 
 /**
- * Arc's explorer, for the "view on chain" links.
+ * One network, named in one place.
  *
- * Testnet by design. The contracts this site reads are a testnet deployment, and
- * pointing a public page at mainnet would imply a claim the repo does not make.
+ * The site used to have testnet baked into five files: an explorer constant in
+ * three of them, RPC endpoints in the Worker config, and a chain label in the API
+ * response. That is fine until the day you want it pointing somewhere else, at
+ * which point "change the network" is a scavenger hunt with a deployed site as the
+ * penalty for missing one.
+ *
+ * So the network is a variable, and everything downstream is derived. The frontend
+ * no longer holds an explorer URL at all: the API tells it which chain it is
+ * talking to, and the pages believe the API. A page that hardcodes an explorer can
+ * disagree with the chain it is reading, and the disagreement looks like a broken
+ * link rather than a wrong claim.
  */
-export const EXPLORER = "https://explorer.testnet.arc.io";
+export type NetworkKey = "arc-testnet" | "arc-mainnet";
+
+export type NetworkProfile = {
+  key: NetworkKey;
+  /** The chain's own id, as the RPC reports it. */
+  chainId: number;
+  /** What to call it in the interface. */
+  label: string;
+  /** Where a reader can verify a transaction. */
+  explorer: string;
+  /** Public read endpoints, tried in order. */
+  rpcUrls: string[];
+};
+
+export const NETWORKS: Record<NetworkKey, NetworkProfile> = {
+  "arc-testnet": {
+    key: "arc-testnet",
+    chainId: 5042002,
+    label: "Arc Testnet",
+    explorer: "https://explorer.testnet.arc.io",
+    rpcUrls: [
+      "https://rpc.testnet.arc.io",
+      "https://rpc.blockdaemon.testnet.arc.io",
+      "https://rpc.drpc.testnet.arc.io",
+    ],
+  },
+  "arc-mainnet": {
+    key: "arc-mainnet",
+    chainId: 5042,
+    label: "Arc",
+    explorer: "https://explorer.arc.io",
+    rpcUrls: ["https://rpc.mainnet.arc.io", "https://rpc.blockdaemon.mainnet.arc.io"],
+  },
+};
+
+/**
+ * Resolve the network from the Worker's environment.
+ *
+ * An unknown value is a hard failure rather than a silent fallback: a site that
+ * quietly reads testnet while its configuration says mainnet is the worst of both,
+ * because the numbers it shows look real.
+ */
+export function resolveNetwork(configured: string | undefined): NetworkProfile {
+  const key = (configured ?? "arc-testnet").trim() as NetworkKey;
+  const profile = NETWORKS[key];
+  if (!profile) {
+    throw new Error(
+      `HOROS_NETWORK is "${configured}", which is not a chain this site knows. ` +
+        `Set it to one of: ${Object.keys(NETWORKS).join(", ")}.`,
+    );
+  }
+  return profile;
+}
 
 /** USDC on Arc, same address on mainnet and testnet. Six decimals. */
 export const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";

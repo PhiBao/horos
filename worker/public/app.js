@@ -22,7 +22,19 @@ const esc = (s) =>
 
 const short = (a) => (a && a.length > 12 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a ?? "—");
 
-const EXPLORER = "https://explorer.testnet.arc.io";
+/**
+ * Where "view on chain" points.
+ *
+ * Deliberately not a constant: the API says which chain it read, and a page that
+ * hardcodes an explorer can disagree with the chain it is describing. That
+ * disagreement shows up as a broken link, which looks like a small bug and is
+ * actually a false claim about where the money is.
+ */
+let explorer = null;
+const explorerFor = (card) => {
+  explorer = card?.chain?.explorer ?? explorer;
+  return explorer ?? "https://explorer.testnet.arc.io";
+};
 
 /* --------------------------------------------------------------------------
    The three sample documents.
@@ -289,7 +301,7 @@ function renderCounterparty(card) {
                <div><dt>Status</dt><dd>${esc(c.status)}</dd></div>
                <div><dt>Currently paid at</dt><dd class="mono">${esc(c.activeAccount)}</dd></div>
                <div><dt>Accounts ever paid</dt><dd>${c.accountCount}</dd></div>
-               <div><dt>Registry</dt><dd class="mono"><a href="${EXPLORER}/address/${esc(card.read.account ?? "")}" target="_blank" rel="noopener">view on Arc</a></dd></div>
+               <div><dt>Chain</dt><dd class="mono"><a href="${esc(explorerFor(card))}/address/${esc(card.chain?.registry ?? "")}" target="_blank" rel="noopener">${esc(card.chain?.name ?? "Arc")} · view the registry</a></dd></div>
              </dl>`
           : `<p class="none">No record yet. Nobody has paid this counterparty, so there is no history to
              check against — which is itself the most important thing to know about this invoice.</p>
@@ -312,7 +324,7 @@ function render(card) {
       ${renderContract(card)}
       ${renderCounterparty(card)}
     </div>
-    <p class="meta">policy ${esc(card.policyVersion)} · decided in ${esc(card.tookMs)}ms ·
+    <p class="meta">${esc(card.chain?.name ?? "Arc")} · policy ${esc(card.policyVersion)} · decided in ${esc(card.tookMs)}ms ·
       <a href="https://github.com/PhiBao/horos/blob/main/lib/policy.ts">read the decision</a></p>`;
   el.scrollIntoView({behavior: "smooth", block: "start"});
 }
@@ -397,6 +409,19 @@ function main() {
       $("#go").disabled = false;
     }
   });
+
+  // The footer's explorer link is a claim about which chain this is; take it from
+  // the API on first load rather than trusting a constant written months ago.
+  fetch("/healthz")
+    .then((r) => r.json())
+    .then((h) => {
+      const link = document.querySelector("[data-explorer-link]");
+      if (link && h.explorer) {
+        link.href = h.explorer;
+        link.textContent = h.chainName ?? "Arc explorer";
+      }
+    })
+    .catch(() => {});
 
   // Reachable by link: /?cp=0x… prefills the id.
   const cp = new URLSearchParams(location.search).get("cp");

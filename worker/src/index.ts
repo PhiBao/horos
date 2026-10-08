@@ -32,7 +32,7 @@
  */
 
 import {createPublicClient, fallback, http, type PublicClient} from "viem";
-import {arcTestnet} from "viem/chains";
+import {arc as arcMainnet, arcTestnet} from "viem/chains";
 
 import {REGISTRY_READ_ABI, VAULT_READ_ABI} from "./abi.js";
 import {resolveDestination, extractByRegex} from "../../lib/invoice.js";
@@ -40,7 +40,7 @@ import {concern, judgeDocument} from "../../lib/judgment.js";
 import {classifyWatch, type WatchedCounterparty} from "../../lib/watch.js";
 import {decide, type Evidence, type Reason} from "../../lib/policy.js";
 import {screenCounterparty, toEvidence, unscreened} from "../../lib/screening.js";
-import {EXPLORER, POLICY_VERSION} from "./config.js";
+import {POLICY_VERSION, resolveNetwork} from "./config.js";
 import {labelStatus, labelSuccessionState} from "../../lib/enums.js";
 
 // ---------------------------------------------------------------------------
@@ -54,9 +54,10 @@ import {labelStatus, labelSuccessionState} from "../../lib/enums.js";
  * file could not move money: the transport it holds has no write method.
  */
 function readClient(env: Env): PublicClient {
+  const network = resolveNetwork(env.HOROS_NETWORK);
   return createPublicClient({
-    chain: arcTestnet,
-    transport: fallback(env.ARC_RPC_URLS.split(",").map((u) => http(u.trim()))),
+    chain: network.key === "arc-mainnet" ? arcMainnet : arcTestnet,
+    transport: fallback(network.rpcUrls.map((u) => http(u))),
   }) as PublicClient;
 }
 
@@ -262,6 +263,8 @@ export type DecisionCard = {
     counterpartyCap: string;
     globalCap: string;
   };
+  /** Which chain this verdict came from, so the page never guesses. */
+  chain: {name: string; chainId: number; explorer: string; registry: string; vault: string};
   policyVersion: string;
   tookMs: number;
 };
@@ -294,6 +297,7 @@ async function decideFromDocument(
   callerKey: string,
 ): Promise<DecisionCard> {
   const startedAt = Date.now();
+  const network = resolveNetwork(env.HOROS_NETWORK);
 
   const [counterparty, budgets, parsed] = await Promise.all([
     readCounterparty(env, id),
@@ -307,7 +311,7 @@ async function decideFromDocument(
   // When nothing resolved there is nothing to screen, and the result says so
   // rather than screening the zero address (whose nonce reads zero, which would
   // report "novel" about nothing and file it as diligence).
-  const rpcUrls = env.ARC_RPC_URLS.split(",").map((u) => u.trim());
+  const rpcUrls = resolveNetwork(env.HOROS_NETWORK).rpcUrls;
   const screening = account
     ? await screenCounterparty(account, {rpcUrls})
     : unscreened("The document never resolved to an address, so there was nothing to screen.");
@@ -426,6 +430,13 @@ async function decideFromDocument(
       vaultBalance: formatUsdc(budgets.vaultBalance),
       counterpartyCap: formatUsdc(budgets.counterpartyCap),
       globalCap: formatUsdc(budgets.globalCap),
+    },
+    chain: {
+      name: network.label,
+      chainId: network.chainId,
+      explorer: network.explorer,
+      registry: env.REGISTRY_ADDRESS,
+      vault: env.VAULT_ADDRESS,
     },
     policyVersion: POLICY_VERSION,
     tookMs: Date.now() - startedAt,
@@ -548,6 +559,11 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Resolved once, near the edge of the request, so every layer below reads the
+    // same chain. A misconfigured value throws here and becomes the 502 below,
+    // rather than a site that quietly reads one chain and links to another.
+    const network = resolveNetwork(env.HOROS_NETWORK);
+
     ctx.waitUntil(
       (async () => {
         try {
@@ -568,7 +584,11 @@ export default {
         return json({
           ok: true,
           judgment: Boolean(env.JUDGMENT_API_KEY),
-          rpc: env.ARC_RPC_URLS.split(",").length,
+          network: network.key,
+          chainId: network.chainId,
+          chainName: network.label,
+          explorer: network.explorer,
+          rpc: network.rpcUrls.length,
           limiter: Boolean(env.DECISION_LIMITER),
           limiterProbe: probe,
         });
@@ -686,9 +706,9 @@ export default {
             globalCap: formatUsdc(budgets.globalCap),
           },
           chain: {
-            name: "Arc Testnet",
-            chainId: 5042002,
-            explorer: EXPLORER,
+            name: network.label,
+            chainId: network.chainId,
+            explorer: network.explorer,
             registry: env.REGISTRY_ADDRESS,
             vault: env.VAULT_ADDRESS,
           },

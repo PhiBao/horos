@@ -28,10 +28,14 @@
   },
 
   "vars": {
-    // Public Arc testnet endpoints. Reads only - Arc's public RPCs reject writes by
-    // design, which is one of the reasons this site can hold no key and still be
-    // honest about it.
-    "ARC_RPC_URLS": "https://rpc.testnet.arc.io,https://rpc.blockdaemon.testnet.arc.io,https://rpc.drpc.testnet.arc.io",
+    // The chain this site reads. One variable, and everything downstream derives
+    // from it: RPC endpoints, the explorer behind every "view on chain" link, and
+    // the chain label the API reports. An unknown value fails loudly rather than
+    // falling back, because a site that reads testnet while its config says mainnet
+    // shows numbers that look real and are not.
+    //
+    //   "arc-testnet" | "arc-mainnet"
+    "HOROS_NETWORK": "arc-testnet",
 
     // The live testnet deployment, from deployment.json.
     "REGISTRY_ADDRESS": "0x9ea65e1f6a5ca0c55d6e3db18dfed54ded8fe5d1",

@@ -26,6 +26,12 @@ type Deployment = {
   deployedAt: string;
 };
 
+/** The chain ids this site knows, so a deployment cannot point it at a stranger. */
+const KNOWN_CHAINS: Record<string, number> = {
+  "arc-testnet": 5042002,
+  "arc-mainnet": 5042,
+};
+
 function main(): void {
   const deployment = JSON.parse(readFileSync(resolve("deployment.json"), "utf8")) as Deployment;
 
@@ -40,7 +46,26 @@ function main(): void {
   const path = resolve("wrangler.jsonc");
   const before = readFileSync(path, "utf8");
 
+  // The network travels with the addresses. Pointing the site at mainnet contracts
+  // while its own configuration still says testnet is the failure this prevents:
+  // every explorer link would lead to a chain that has never heard of the registry.
+  const expected = KNOWN_CHAINS[deployment.network];
+  if (expected === undefined) {
+    throw new Error(
+      `deployment.json says network "${deployment.network}", which this site does not know. ` +
+        `Known: ${Object.keys(KNOWN_CHAINS).join(", ")}. Add it to KNOWN_CHAINS here and to ` +
+        `NETWORKS in worker/src/config.ts, or fix the deployment.`,
+    );
+  }
+  if (deployment.chainId !== expected) {
+    throw new Error(
+      `deployment.json says ${deployment.network} but chainId ${deployment.chainId}; ` +
+        `${deployment.network} is ${expected}. Refusing to point the site at a contradiction.`,
+    );
+  }
+
   const after = before
+    .replace(/("HOROS_NETWORK":\s*")[^"]*(")/, `$1${deployment.network}$2`)
     .replace(/("REGISTRY_ADDRESS":\s*")[^"]*(")/, `$1${deployment.registry}$2`)
     .replace(/("VAULT_ADDRESS":\s*")[^"]*(")/, `$1${deployment.vault}$2`);
 
@@ -51,7 +76,7 @@ function main(): void {
 
   writeFileSync(path, after);
   console.log(
-    `wrangler.jsonc now points at ${deployment.network}:\n` +
+    `wrangler.jsonc now points at ${deployment.network} (chain ${deployment.chainId}):\n` +
       `  registry  ${deployment.registry}\n` +
       `  vault     ${deployment.vault}\n` +
       `  deployed  ${deployment.deployedAt}\n\n` +
